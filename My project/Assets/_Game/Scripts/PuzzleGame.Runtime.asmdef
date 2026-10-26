@@ -1,0 +1,6 @@
+{
+  "name": "PuzzleGame.Runtime",
+  "rootNamespace": "PuzzleGame",
+  "references": ["Unity.InputSystem", "UnityEngine.UI"],
+  "autoReferenced": true
+}
