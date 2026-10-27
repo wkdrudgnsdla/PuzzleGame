@@ -75,11 +75,22 @@ namespace PuzzleGame
         private Vector3 targetPanOffset;
         private float currentZoomSize;
         private float targetZoomSize;
+        private Vector3 cameraPlayerAnchor;
+        private Vector3 cameraFramingOffset;
+        private float camera2DFollowDepth;
+        private bool zoomAroundPointer;
+        private Vector3 zoomAnchor;
+        private Vector2 zoomAnchorViewport;
 
         private Vector3 Spawn => SpawnPoint != null ? SpawnPoint.position : Vector3.zero;
         private Vector3 Goal => ExitPoint != null ? ExitPoint.position : new Vector3(8f, 0f, 4f);
-        private Vector3 CameraFocus => (CameraFocusPoint != null ? CameraFocusPoint.position
-            : new Vector3(4f, 1.1f, 2f)) + currentPanOffset;
+        private Vector3 CameraBaseFocus => CameraFocusPoint != null ? CameraFocusPoint.position
+            : new Vector3(4f, 1.1f, 2f);
+        // Framing is stored in view space so rotating never swings the player across the screen.
+        private Vector3 CameraFocus => cameraPlayerAnchor
+            + frame.Right * (cameraFramingOffset.x + currentPanOffset.x)
+            + frame.Up * (cameraFramingOffset.y + currentPanOffset.y)
+            + frame.Forward * (cameraFramingOffset.z + currentPanOffset.z);
 
         public bool Is2D { get; private set; }
         public float YawDegrees => frame.Yaw;
@@ -295,6 +306,44 @@ namespace PuzzleGame
             if (preview.HasValue) returnMarker.position = preview.Value + Vector3.up * 0.02f;
         }
 
+        private void LateUpdate()
+        {
+            if (initialized) UpdateCameraFollow();
+        }
+
+        private Vector3 GetCameraPlayerAnchor()
+        {
+            if (!Is2D) return player3D.Foot + Vector3.up * (PrototypePlayer3D.Height * 0.5f);
+            Vector2 center = player2D.Foot + (IsTopDown2D ? Vector2.zero
+                : Vector2.up * (PrototypePlayer3D.Height * 0.5f));
+            // Keep depth continuous in 2D instead of following a changing return-preview platform.
+            return frame.Unproject(center, camera2DFollowDepth);
+        }
+
+        private void UpdateCameraFollow()
+        {
+            Vector3 anchor = GetCameraPlayerAnchor();
+            Vector3 movement = anchor - cameraPlayerAnchor;
+            if (movement.sqrMagnitude == 0f) return;
+            cameraPlayerAnchor = anchor;
+            if (zoomAroundPointer) zoomAnchor += movement;
+            UpdateCameraPose();
+        }
+
+        private void RebaseCameraFollow()
+        {
+            Vector3 anchor = GetCameraPlayerAnchor();
+            Vector3 movement = anchor - cameraPlayerAnchor;
+            // A mode change can restore a different world depth. Adopt that depth immediately
+            // while preserving the current projection of the whole scene.
+            Vector3 framingCorrection = new Vector3(Vector3.Dot(movement, frame.Right),
+                Vector3.Dot(movement, frame.Up), 0f);
+            currentPanOffset -= framingCorrection;
+            targetPanOffset -= framingCorrection;
+            cameraPlayerAnchor = anchor;
+            UpdateCameraPose();
+        }
+
         private void UpdateMouseOrbit()
         {
             Mouse mouse = Mouse.current;
@@ -307,19 +356,16 @@ namespace PuzzleGame
                     float scroll = mouse.scroll.ReadValue().y;
                     float steps = Mathf.Abs(scroll) > 10f ? scroll / 120f : scroll;
                     if (!Mathf.Approximately(steps, 0f))
-                        targetZoomSize = ClampZoom(targetZoomSize * Mathf.Exp(-steps * wheelZoomSpeed));
+                        ZoomAtPointer(steps, pointer);
                 }
                 if (!Is2D && !overUi && mouse.rightButton.wasPressedThisFrame)
                 {
-                    StopMouseOrbit();
-                    draggingView = true;
-                    lastDragPosition = pointer;
-                    targetViewYaw = currentViewYaw;
-                    targetViewPitch = currentViewPitch;
+                    BeginViewDrag(pointer);
                 }
                 if (!overUi && mouse.leftButton.wasPressedThisFrame && !mouse.rightButton.isPressed)
                 {
                     StopMouseOrbit();
+                    zoomAroundPointer = false;
                     panningCamera = true;
                     lastPanPosition = pointer;
                     targetPanOffset = currentPanOffset;
@@ -328,31 +374,73 @@ namespace PuzzleGame
                 {
                     // Pointer displacement already measures this frame's movement; do not multiply by deltaTime.
                     Vector2 delta = pointer - lastDragPosition;
-                    float orbitSensitivity = dragDegreesPerPixel * Mathf.Min(1f,
-                        currentZoomSize / Mathf.Max(0.1f, initialZoomSize));
-                    targetViewYaw += delta.x * orbitSensitivity;
-                    targetViewPitch = Mathf.Clamp(targetViewPitch - delta.y * orbitSensitivity,
-                        -verticalOrbitLimitDegrees, verticalOrbitLimitDegrees);
+                    DragView(delta);
                     lastDragPosition = pointer;
                     if (!mouse.rightButton.isPressed) draggingView = false;
                 }
                 if (panningCamera)
                 {
                     Vector2 delta = pointer - lastPanPosition;
-                    float unitsPerPixel = 2f * currentZoomSize / Mathf.Max(1, camera3D.pixelHeight);
-                    targetPanOffset -= (frame.Right * delta.x + frame.Up * delta.y) * unitsPerPixel * panSensitivity;
+                    float unitsPerPixel = 2f * ZoomSize / Mathf.Max(1, camera3D.pixelHeight);
+                    targetPanOffset -= new Vector3(delta.x, delta.y, 0f) * unitsPerPixel * panSensitivity;
                     lastPanPosition = pointer;
                     if (!mouse.leftButton.isPressed) panningCamera = false;
                 }
             }
             else if (draggingView || panningCamera) StopMouseOrbit();
 
+            UpdateCameraMotion(Time.unscaledDeltaTime);
+        }
+
+        private Vector3 PickCameraAnchor(Vector2 pointer)
+        {
+            Ray ray = camera3D.ScreenPointToRay(pointer);
+            if (!Is2D && Physics.Raycast(ray, out RaycastHit hit, camera3D.farClipPlane,
+                (1 << World3DLayer) | (1 << Player3DLayer), QueryTriggerInteraction.Ignore))
+                return hit.point;
+
+            // Empty space and 2D use the focus plane, so navigation never selects hidden 3D geometry.
+            var plane = new Plane(frame.Forward, CameraFocus);
+            return plane.Raycast(ray, out float distance) ? ray.GetPoint(distance) : CameraFocus;
+        }
+
+        private void BeginViewDrag(Vector2 pointer)
+        {
+            StopMouseOrbit();
+            zoomAroundPointer = false;
+            draggingView = true;
+            lastDragPosition = pointer;
+            // Follow the player while preserving their current screen framing, regardless of click position.
+        }
+
+        private void DragView(Vector2 delta)
+        {
+            // Match screen-space motion across zoom levels and viewport resolutions.
+            float zoomScale = Mathf.Min(1f, currentZoomSize / ClampZoom(initialZoomSize));
+            float sensitivity = dragDegreesPerPixel * zoomScale * 1080f / Mathf.Max(1, camera3D.pixelHeight);
+            targetViewYaw += delta.x * sensitivity;
+            targetViewPitch = Mathf.Clamp(targetViewPitch - delta.y * sensitivity,
+                -verticalOrbitLimitDegrees, verticalOrbitLimitDegrees);
+        }
+
+        private void ZoomAtPointer(float steps, Vector2 pointer)
+        {
+            float nextTarget = ClampZoom(targetZoomSize * Mathf.Exp(-steps * wheelZoomSpeed));
+            if (Mathf.Approximately(nextTarget, targetZoomSize)) return;
+            zoomAnchor = PickCameraAnchor(pointer);
+            zoomAnchorViewport = camera3D.ScreenToViewportPoint(pointer);
+            zoomAroundPointer = !panningCamera;
+            targetZoomSize = nextTarget;
+        }
+
+        private void UpdateCameraMotion(float deltaTime)
+        {
             float remaining = targetViewYaw - currentViewYaw;
             float pitchRemaining = targetViewPitch - currentViewPitch;
             if (!Is2D && (Mathf.Abs(remaining) > 0.001f || Mathf.Abs(pitchRemaining) > 0.001f))
             {
                 // Keep the drag angle unwrapped so a stroke can pass through 0/360 without reversing.
-                float blend = 1f - Mathf.Exp(-dragSmoothing * Time.unscaledDeltaTime);
+                float blend = 1f - Mathf.Exp(-dragSmoothing * deltaTime);
                 float next = Mathf.Abs(remaining) < 0.01f ? targetViewYaw
                     : Mathf.Lerp(currentViewYaw, targetViewYaw, blend);
                 currentViewPitch = Mathf.Abs(pitchRemaining) < 0.01f ? targetViewPitch
@@ -369,17 +457,29 @@ namespace PuzzleGame
 
             targetZoomSize = ClampZoom(targetZoomSize);
             float nextZoom = Mathf.Lerp(currentZoomSize, targetZoomSize,
-                1f - Mathf.Exp(-zoomSmoothing * Time.unscaledDeltaTime));
+                1f - Mathf.Exp(-zoomSmoothing * deltaTime));
             nextZoom = ClampZoom(Mathf.Abs(nextZoom - targetZoomSize) < 0.001f ? targetZoomSize : nextZoom);
             Vector3 nextPan = Vector3.Lerp(currentPanOffset, targetPanOffset,
-                1f - Mathf.Exp(-panSmoothing * Time.unscaledDeltaTime));
+                1f - Mathf.Exp(-panSmoothing * deltaTime));
             if ((nextPan - targetPanOffset).sqrMagnitude < 0.000001f) nextPan = targetPanOffset;
             if (nextZoom != currentZoomSize || nextPan != currentPanOffset)
             {
                 currentZoomSize = nextZoom;
                 currentPanOffset = nextPan;
+                if (zoomAroundPointer)
+                {
+                    Vector3 offset = zoomAnchor - CameraFocus;
+                    float halfWidth = currentZoomSize * camera3D.aspect;
+                    Vector3 correction = new Vector3(Vector3.Dot(offset, frame.Right)
+                        - (zoomAnchorViewport.x - 0.5f) * 2f * halfWidth,
+                        Vector3.Dot(offset, frame.Up)
+                        - (zoomAnchorViewport.y - 0.5f) * 2f * currentZoomSize, 0f);
+                    currentPanOffset += correction;
+                    targetPanOffset += correction;
+                }
                 UpdateCameraPose();
             }
+            if (currentZoomSize == targetZoomSize) zoomAroundPointer = false;
         }
 
         private void StopMouseOrbit()
@@ -481,6 +581,7 @@ namespace PuzzleGame
         public bool TryToggleMode()
         {
             if (!initialized) return false;
+            UpdateCameraFollow();
             UpdateSupport();
             if (!IsGrounded || support == null)
             { Notify("발판에 착지한 상태에서 R을 눌러주세요."); return false; }
@@ -522,6 +623,7 @@ namespace PuzzleGame
                 lastAnchor = player3D.Foot;
                 player3D.gameObject.SetActive(false);
                 player2D.SetSimulated(true);
+                camera2DFollowDepth = frame.Depth(cameraPlayerAnchor);
                 Is2D = true;
                 Notify(IsTopDown2D ? "탑뷰 2D · WASD로 바닥 안에서 자유롭게 이동하세요."
                     : "사이드뷰 2D · 화면에서 연결된 발판을 걸어서 건널 수 있습니다.");
@@ -539,6 +641,7 @@ namespace PuzzleGame
                 Is2D = false;
                 Notify("3D 모드 · 이동한 발판의 실제 깊이로 돌아왔습니다.");
             }
+            RebaseCameraFollow();
             camera3D.enabled = !Is2D;
             camera2D.enabled = Is2D;
             return true;
@@ -567,16 +670,27 @@ namespace PuzzleGame
 
         private void UpdateCameraPose()
         {
-            // Orthographic projection keeps every depth aligned with the generated 2D world.
-            // Dolly as zoom changes, with enough clearance for terrain near the focus.
-            float distance = 25f + currentZoomSize;
+            // Camera distance only provides clipping clearance; both modes share the same zoom.
+            float nearestDepth = 0f;
+            float farthestDepth = 0f;
+            Vector3 absoluteForward = new Vector3(Mathf.Abs(frame.Forward.x),
+                Mathf.Abs(frame.Forward.y), Mathf.Abs(frame.Forward.z));
+            foreach (ProjectableBox box in terrain)
+            {
+                if (box == null) continue;
+                Bounds bounds = box.SourceCollider.bounds;
+                float depth = Vector3.Dot(bounds.center - CameraFocus, frame.Forward);
+                float extent = Vector3.Dot(bounds.extents, absoluteForward);
+                nearestDepth = Mathf.Min(nearestDepth, depth - extent);
+                farthestDepth = Mathf.Max(farthestDepth, depth + extent);
+            }
+            float distance = Mathf.Max(25f, 2f - nearestDepth);
             camera3D.transform.SetPositionAndRotation(CameraFocus - frame.Forward * distance,
                 Quaternion.LookRotation(frame.Forward, frame.Up));
-            camera3D.farClipPlane = Mathf.Max(100f, distance + 50f);
+            camera3D.farClipPlane = Mathf.Max(100f, distance + farthestDepth + 2f);
             Vector2 focus = frame.Project(CameraFocus);
             camera2D.transform.SetPositionAndRotation(new Vector3(focus.x, focus.y, -25f), Quaternion.identity);
-            camera3D.orthographicSize = currentZoomSize;
-            camera2D.orthographicSize = currentZoomSize;
+            camera3D.orthographicSize = camera2D.orthographicSize = currentZoomSize;
         }
 
         private float ClampZoom(float size)
@@ -669,8 +783,11 @@ namespace PuzzleGame
             UpdateSupport();
             StopMouseOrbit();
             currentViewPitch = targetViewPitch = 0f;
-            currentPanOffset = targetPanOffset = position - Spawn;
+            cameraPlayerAnchor = position + Vector3.up * (PrototypePlayer3D.Height * 0.5f);
+            cameraFramingOffset = CameraBaseFocus - (Spawn + Vector3.up * (PrototypePlayer3D.Height * 0.5f));
+            currentPanOffset = targetPanOffset = Vector3.zero;
             currentZoomSize = targetZoomSize = ClampZoom(initialZoomSize);
+            zoomAroundPointer = false;
             ApplyView(0f);
             targetViewYaw = currentViewYaw;
             camera3D.enabled = true;
