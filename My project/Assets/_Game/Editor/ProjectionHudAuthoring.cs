@@ -1,152 +1,192 @@
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro;
 
 namespace PuzzleGame.Editor
 {
-    /// <summary>Authors the retained header UI as ordinary scene objects.</summary>
+    /// <summary>The shared, editable HUD prefab and scene bindings.</summary>
     public static class ProjectionHudAuthoring
     {
-        private static readonly Color Panel = new Color(0.035f, 0.055f, 0.085f, 0.94f);
-        private static readonly Color Muted = new Color(0.64f, 0.72f, 0.80f);
-        private static readonly Color Amber = new Color(1f, 0.72f, 0.32f);
+        public const string PrefabPath = "Assets/_Game/Prefabs/UI/ProjectionHUD.prefab";
+        private static readonly Color Panel = new Color(.035f,.055f,.085f,.94f);
+        private static readonly Color Muted = new Color(.64f,.72f,.8f);
+        private static readonly Color Amber = new Color(1f,.72f,.32f);
 
         [MenuItem("Puzzle Game/Add or Select Scene HUD")]
         public static void AddOrSelectSceneHud()
         {
-            ProjectionPrototype owner = Selection.activeGameObject != null
-                ? Selection.activeGameObject.GetComponentInParent<ProjectionPrototype>() : null;
-            if (owner == null)
-                owner = UnityEngine.Object.FindFirstObjectByType<ProjectionPrototype>(FindObjectsInactive.Include);
-            if (owner == null)
-            {
-                Debug.LogWarning("Projection Prototype 오브젝트를 먼저 선택하거나 프로토타입 씬을 열어주세요.");
-                return;
-            }
+            ProjectionPrototype owner=Selection.activeGameObject!=null
+                ?Selection.activeGameObject.GetComponentInParent<ProjectionPrototype>():null;
+            if(owner==null)owner=UnityEngine.Object.FindFirstObjectByType<ProjectionPrototype>(FindObjectsInactive.Include);
+            if(owner==null){Debug.LogWarning("Projection Prototype 오브젝트가 있는 씬을 열어주세요.");return;}
+            Selection.activeGameObject=CreateHud(owner).gameObject;
+        }
 
-            CreateHud(owner);
+        [MenuItem("Puzzle Game/UI/Rebuild HUD Prefab")]
+        public static void RebuildHudPrefab()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(PrefabPath));
+            AssetDatabase.Refresh();
+            ProjectionPrototypeHud hud=BuildHudObject();
+            PrefabUtility.SaveAsPrefabAsset(hud.gameObject,PrefabPath);
+            UnityEngine.Object.DestroyImmediate(hud.gameObject);
+            AssetDatabase.SaveAssets();
         }
 
         public static ProjectionPrototypeHud CreateHud(ProjectionPrototype owner)
         {
-            if (owner == null) throw new ArgumentNullException(nameof(owner));
-            if (owner.Hud != null)
-            {
-                Selection.activeGameObject = owner.Hud.gameObject;
-                return owner.Hud;
-            }
+            if(owner==null)throw new ArgumentNullException(nameof(owner));
+            if(owner.Hud!=null)return owner.Hud;
+            return InstantiateHud(owner);
+        }
 
-            foreach (Canvas existing in UnityEngine.Object.FindObjectsByType<Canvas>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None))
-            {
-                if (existing.gameObject.scene != owner.gameObject.scene) continue;
-                // Existing scene UI belongs to the designer; select it without changing it.
-                Selection.activeGameObject = existing.gameObject;
-                return existing.GetComponent<ProjectionPrototypeHud>();
-            }
-
-            var canvasObject = new GameObject("Prototype HUD", typeof(RectTransform), typeof(Canvas),
-                typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(ProjectionPrototypeHud));
-            canvasObject.layer = 5;
-            SceneManager.MoveGameObjectToScene(canvasObject, owner.gameObject.scene);
-            Undo.RegisterCreatedObjectUndo(canvasObject, "Create Projection HUD");
-            Canvas canvas = canvasObject.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100;
-            CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1280f, 720f);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-
-            ProjectionPrototypeHud hud = canvasObject.GetComponent<ProjectionPrototypeHud>();
-            hud.Prototype = owner;
-            RectTransform canvasRect = (RectTransform)canvasObject.transform;
-            Image header = Image("Header", canvasRect, new Vector2(24f, -24f), new Vector2(-48f, 88f), Panel);
-            StretchTop(header.rectTransform);
-            hud.AccentTop = Image("Accent Top", header.rectTransform, Vector2.zero, new Vector2(3f, 0f), Amber);
-            hud.AccentTop.rectTransform.anchorMin = Vector2.zero;
-            hud.AccentTop.rectTransform.anchorMax = Vector2.up;
-            hud.ModeBadge = Image("Mode Badge", header.rectTransform, new Vector2(18f, -20f),
-                new Vector2(80f, 48f), new Color(Amber.r, Amber.g, Amber.b, 0.14f));
-            hud.ModeText = Text("Mode Text", hud.ModeBadge.rectTransform, Vector2.zero, Vector2.zero,
-                "3D", 30, Amber, FontStyle.Bold, TextAnchor.MiddleCenter);
-            FillParent(hud.ModeText.rectTransform);
-            hud.YawText = Text("Yaw Value", header.rectTransform, new Vector2(120f, -27f), new Vector2(128f, 34f),
-                "좌우 0.0°", 22, Amber, FontStyle.Bold);
-            hud.PitchText = Text("Pitch Value", header.rectTransform, new Vector2(264f, -27f), new Vector2(128f, 34f),
-                "상하 0.0°", 22, Amber, FontStyle.Bold);
-            hud.SupportText = Text("Support Value", header.rectTransform, new Vector2(408f, -27f), new Vector2(160f, 34f),
-                "Platform A", 20, Color.white, FontStyle.Bold);
-            hud.ModeHintText = Text("Mode Hint", header.rectTransform, new Vector2(600f, -28f), new Vector2(-614f, 32f),
-                "R로 공간 접기", 16, Muted);
-            StretchTop(hud.ModeHintText.rectTransform);
-
-            Undo.RecordObject(owner, "Bind Projection HUD");
-            owner.Hud = hud;
+        private static ProjectionPrototypeHud InstantiateHud(ProjectionPrototype owner)
+        {
+            GameObject prefab=AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            if(prefab==null){RebuildHudPrefab();prefab=AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);}
+            var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,owner.gameObject.scene);
+            ProjectionPrototypeHud hud=instance.GetComponent<ProjectionPrototypeHud>();
+            hud.Prototype=owner;
+            owner.Hud=hud;
+            ProjectionMinimap minimap=ProjectionMinimap.AttachTo(owner);
+            hud.RefreshLabels();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(hud);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(minimap);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(minimap.rectTransform);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(hud.ModeHintText);
             EditorUtility.SetDirty(owner);
             EditorSceneManager.MarkSceneDirty(owner.gameObject.scene);
-            Selection.activeGameObject = canvasObject;
             return hud;
         }
 
-        private static RectTransform Rect(string name, Transform parent, Vector2 position, Vector2 size)
+        // Batch migration only replaces the HUD; hand-authored map objects remain untouched.
+        public static void RebuildAllSceneHudsForAutomation()
         {
-            var result = new GameObject(name, typeof(RectTransform));
-            result.layer = 5;
-            RectTransform rect = (RectTransform)result.transform;
-            rect.SetParent(parent, false);
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = position;
-            rect.sizeDelta = size;
-            return rect;
+            RebuildHudPrefab();
+            int count=0;
+            foreach(string guid in AssetDatabase.FindAssets("t:Scene",new[]{"Assets/_Game/Scenes"}))
+            {
+                string path=AssetDatabase.GUIDToAssetPath(guid);
+                Scene scene=EditorSceneManager.OpenScene(path,OpenSceneMode.Single);
+                ProjectionPrototype owner=UnityEngine.Object.FindFirstObjectByType<ProjectionPrototype>();
+                if(owner==null)continue;
+                ProjectionPrototypeHud oldHud=owner.Hud;
+                owner.Hud=null;
+                ProjectionPrototypeHud hud=InstantiateHud(owner);
+                CampaignStageFlow flow=owner.GetComponent<CampaignStageFlow>();
+                if(flow!=null)
+                {
+                    if(flow.TutorialText!=null)
+                        flow.TutorialText.transform.SetParent(hud.transform.Find("Safe Area") ?? hud.transform,false);
+                    flow.ClearText=hud.ClearText;
+                    EditorUtility.SetDirty(flow);
+                }
+                if(oldHud!=null)UnityEngine.Object.DestroyImmediate(oldHud.gameObject);
+                // Explicitly save scene overrides while retaining the prefab connection.
+                PrefabUtility.RecordPrefabInstancePropertyModifications(hud);
+                ProjectionMinimap map=hud.GetComponentInChildren<ProjectionMinimap>(true);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(map);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(map.rectTransform);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(hud.ModeHintText);
+                if(!EditorSceneManager.SaveScene(scene,path))throw new IOException("Could not save HUD: "+path);
+                count++;
+            }
+            Selection.objects=new UnityEngine.Object[0];
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
+            AssetDatabase.SaveAssets();
+            Debug.Log("HUD PREFAB AUTHORED: "+count+" scenes use "+PrefabPath+"; no Play Mode.");
         }
 
-        private static Image Image(string name, Transform parent, Vector2 position, Vector2 size, Color color)
+        private static ProjectionPrototypeHud BuildHudObject()
         {
-            RectTransform rect = Rect(name, parent, position, size);
-            Image result = rect.gameObject.AddComponent<Image>();
-            result.color = color;
-            result.raycastTarget = false;
-            return result;
+            var go=new GameObject("ProjectionHUD",typeof(RectTransform),typeof(Canvas),
+                typeof(CanvasScaler),typeof(GraphicRaycaster),typeof(ProjectionPrototypeHud));
+            go.layer=5;
+            Canvas canvas=go.GetComponent<Canvas>();
+            canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=100;
+            CanvasScaler scaler=go.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution=new Vector2(1280f,720f);
+            scaler.screenMatchMode=CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;scaler.matchWidthOrHeight=.5f;
+            ProjectionPrototypeHud hud=go.GetComponent<ProjectionPrototypeHud>();
+            hud.KoreanFont=KoreanUiFonts.FontAsset;
+            RectTransform root=(RectTransform)go.transform;
+            Image header=Image("Header",root,new Vector2(24f,-24f),new Vector2(-48f,88f),Panel);
+            header.rectTransform.anchorMax=Vector2.one;
+            hud.AccentTop=Image("Accent Top",header.transform,Vector2.zero,new Vector2(3f,0f),Amber);
+            hud.AccentTop.rectTransform.anchorMin=Vector2.zero;hud.AccentTop.rectTransform.anchorMax=Vector2.up;
+            hud.ModeBadge=Image("Mode Badge",header.transform,new Vector2(18f,-20f),new Vector2(80f,48f),
+                new Color(Amber.r,Amber.g,Amber.b,.14f));
+            hud.ModeText=Label("Mode Text",hud.ModeBadge.transform,Vector2.zero,Vector2.zero,"3D",30,Amber,TextAlignmentOptions.Midline);
+            RectTransform mode=hud.ModeText.rectTransform;
+            mode.anchorMin=Vector2.zero;mode.anchorMax=Vector2.one;mode.offsetMin=mode.offsetMax=Vector2.zero;
+            hud.YawText=Label("Yaw Value",header.transform,new Vector2(120f,-20f),new Vector2(128f,48f),
+                "좌우 25.0°",22,Amber,TextAlignmentOptions.Midline);
+            hud.PitchText=Label("Pitch Value",header.transform,new Vector2(264f,-20f),new Vector2(128f,48f),
+                "상하 25.0°",22,Amber,TextAlignmentOptions.Midline);
+            hud.ModeHintText=Label("Objective Progress",header.transform,new Vector2(-24f,-20f),new Vector2(220f,48f),
+                "클리어 조건 (0/0)",22,hud.ObjectivePendingColor,TextAlignmentOptions.MidlineRight);
+            hud.ModeHintText.rectTransform.anchorMin=hud.ModeHintText.rectTransform.anchorMax=Vector2.one;
+            hud.ModeHintText.rectTransform.pivot=Vector2.one;
+
+            Image controls=Image("Controls",root,new Vector2(24f,24f),new Vector2(308f,174f),Panel);
+            hud.ControlsRoot=controls.gameObject;
+            RectTransform controlsRect=controls.rectTransform;
+            controlsRect.anchorMin=controlsRect.anchorMax=controlsRect.pivot=Vector2.zero;
+            TMP_Text title=Label("Controls Title",controls.transform,new Vector2(16f,-12f),new Vector2(276f,22f),
+                "조작",16,Color.white,TextAlignmentOptions.MidlineLeft);
+            title.fontStyle=FontStyles.Bold;
+            hud.ControlsText=Label("Key Settings",controls.transform,new Vector2(16f,-42f),new Vector2(276f,120f),
+                "WASD  이동 · A/D  횡스크롤\nSpace  점프\nR  2D ↔ 3D 전환\n좌클 드래그  화면 이동\n우클 드래그  회전 · 휠  줌\nBackspace  다시 시작",14,Muted,TextAlignmentOptions.TopLeft);
+            hud.ControlsText.fontStyle=FontStyles.Normal;
+            hud.ClearText=Label("Stage Clear",header.transform,new Vector2(408f,-20f),new Vector2(-668f,48f),
+                "Enter를 눌러 다음스테이지로 이동",18,hud.ObjectiveCompleteColor,TextAlignmentOptions.Midline);
+            RectTransform clear=hud.ClearText.rectTransform;
+            clear.anchorMax=Vector2.one;
+            hud.ClearText.enableAutoSizing=true;
+            hud.ClearText.fontSizeMin=12f;hud.ClearText.fontSizeMax=18f;
+            hud.ClearText.gameObject.SetActive(false);
+            ProjectionMinimap.CreateForHud(hud);
+            RectTransform[] panels=new RectTransform[root.childCount];
+            for(int i=0;i<panels.Length;i++)panels[i]=(RectTransform)root.GetChild(i);
+            RectTransform safeArea=Rect("Safe Area",root,Vector2.zero,Vector2.zero);
+            safeArea.anchorMin=Vector2.zero;safeArea.anchorMax=Vector2.one;
+            safeArea.pivot=new Vector2(.5f,.5f);safeArea.offsetMin=safeArea.offsetMax=Vector2.zero;
+            foreach(RectTransform panel in panels)panel.SetParent(safeArea,false);
+            ProjectionHudLayout layout=go.AddComponent<ProjectionHudLayout>();
+            layout.SafeArea=safeArea;
+            layout.RefreshLayout();
+            return hud;
         }
 
-        private static Text Text(string name, Transform parent, Vector2 position, Vector2 size, string value,
-            int fontSize, Color color, FontStyle fontStyle = FontStyle.Normal,
-            TextAnchor alignment = TextAnchor.MiddleLeft)
+        private static RectTransform Rect(string name,Transform parent,Vector2 position,Vector2 size)
         {
-            RectTransform rect = Rect(name, parent, position, size);
-            Text result = rect.gameObject.AddComponent<Text>();
-            result.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            result.text = value;
-            result.fontSize = fontSize;
-            result.fontStyle = fontStyle;
-            result.color = color;
-            result.alignment = alignment;
-            result.supportRichText = false;
-            result.horizontalOverflow = HorizontalWrapMode.Wrap;
-            result.verticalOverflow = VerticalWrapMode.Overflow;
-            result.raycastTarget = false;
-            return result;
+            var go=new GameObject(name,typeof(RectTransform));go.layer=5;
+            RectTransform rect=(RectTransform)go.transform;rect.SetParent(parent,false);
+            rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0f,1f);
+            rect.anchoredPosition=position;rect.sizeDelta=size;return rect;
         }
 
-        private static void FillParent(RectTransform rect)
+        private static Image Image(string name,Transform parent,Vector2 position,Vector2 size,Color color)
         {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            Image image=Rect(name,parent,position,size).gameObject.AddComponent<Image>();
+            image.color=color;image.raycastTarget=false;return image;
         }
 
-        private static void StretchTop(RectTransform rect)
+        private static TMP_Text Label(string name,Transform parent,Vector2 position,Vector2 size,string value,
+            int fontSize,Color color,TextAlignmentOptions alignment)
         {
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = Vector2.one;
+            TMP_Text text=Rect(name,parent,position,size).gameObject.AddComponent<TextMeshProUGUI>();
+            text.font=KoreanUiFonts.FontAsset;text.text=value;
+            text.fontSize=fontSize;text.fontStyle=FontStyles.Bold;text.color=color;text.alignment=alignment;
+            text.richText=false;text.raycastTarget=false;
+            text.textWrappingMode=TextWrappingModes.NoWrap;text.overflowMode=TextOverflowModes.Overflow;
+            return text;
         }
     }
 }
