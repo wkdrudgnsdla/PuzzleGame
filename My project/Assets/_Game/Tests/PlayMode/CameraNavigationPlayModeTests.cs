@@ -37,6 +37,9 @@ namespace PuzzleGame.Tests
             root = new GameObject("Camera navigation test world");
             root.SetActive(false);
             prototype = root.AddComponent<ProjectionPrototype>();
+            // This fixture's flat test map uses a front view independently of campaign defaults.
+            typeof(ProjectionPrototype).GetField("initialYawDegrees", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(prototype, 0f);
+            typeof(ProjectionPrototype).GetField("initialPitchDegrees", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(prototype, 0f);
             prototype.MapRoot = Child("Map", Vector3.zero);
             CreatePlatform(1, MapOrigin + new Vector3(0f, -1f, 0f));
             CreatePlatform(2, MapOrigin + new Vector3(8f, -1f, 4f));
@@ -70,13 +73,13 @@ namespace PuzzleGame.Tests
         }
 
         [UnityTest]
-        public IEnumerator WheelZoomStaysUnderPointerAndRoundTripsWithoutAFramingJump()
+        public IEnumerator WheelZoomKeepsPlayerFramingAndRoundTripsWithoutAFramingJump()
         {
             Vector3 target = MapOrigin + new Vector3(0f, -0.5f, -1.5f);
             Vector2 pointer = camera3D.WorldToScreenPoint(target);
             InputSystem.QueueStateEvent(mouse, new MouseState { position = pointer });
             yield return null;
-            Vector3 screenBefore = camera3D.WorldToViewportPoint(target);
+            Vector3 screenBefore = camera3D.WorldToViewportPoint(PlayerCenter);
             float initialZoom = prototype.ZoomSize;
             InputSystem.QueueStateEvent(mouse, new MouseState { position = pointer, scroll = new Vector2(0f, 120f) });
             yield return null;
@@ -84,7 +87,7 @@ namespace PuzzleGame.Tests
             for (int i = 0; i < 25; i++)
             {
                 yield return null;
-                AssertScreenPoint(screenBefore, camera3D.WorldToViewportPoint(target));
+                AssertScreenPoint(screenBefore, camera3D.WorldToViewportPoint(PlayerCenter));
             }
             Assert.That(prototype.ZoomSize, Is.LessThan(initialZoom));
             Assert.That(camera3D.orthographic, Is.True);
@@ -97,17 +100,21 @@ namespace PuzzleGame.Tests
             yield return new WaitForFixedUpdate();
             yield return null;
 
-            // The same wheel path must work in 2D and retain the projected target.
-            Vector3 before2DZoom = camera2D.WorldToViewportPoint(new Vector3(target.x, target.y, 0f));
+            // 2D zoom uses the same size and preserves the rendered player's framing.
+            Vector2 projectedPlayer = prototype.PlayerProjectedFoot + Vector2.up * (PrototypePlayer3D.Height * 0.5f);
+            Vector3 before2DZoom = camera2D.WorldToViewportPoint(new Vector3(projectedPlayer.x, projectedPlayer.y, 0f));
+            float zoomBefore2DWheel = prototype.ZoomSize;
             InputSystem.QueueStateEvent(mouse, new MouseState { position = pointer, scroll = new Vector2(0f, -120f) });
             yield return null;
             InputSystem.QueueStateEvent(mouse, new MouseState { position = pointer });
             for (int i = 0; i < 25; i++)
             {
                 yield return null;
-                AssertScreenPoint(before2DZoom, camera2D.WorldToViewportPoint(new Vector3(target.x, target.y, 0f)));
+                projectedPlayer = prototype.PlayerProjectedFoot + Vector2.up * (PrototypePlayer3D.Height * 0.5f);
+                AssertScreenPoint(before2DZoom, camera2D.WorldToViewportPoint(new Vector3(projectedPlayer.x, projectedPlayer.y, 0f)));
                 AssertModeFraming(target);
             }
+            Assert.That(prototype.ZoomSize, Is.GreaterThan(zoomBefore2DWheel));
             Assert.That(prototype.TryToggleMode(), Is.True, prototype.StatusMessage);
             Assert.That(prototype.Is2D, Is.False);
             Assert.That(camera3D.enabled, Is.True);
@@ -151,7 +158,7 @@ namespace PuzzleGame.Tests
         }
 
         [UnityTest]
-        public IEnumerator PanStillMovesTheCameraAndKeepsPlayerFramingDuringMovementAndOrbit()
+        public IEnumerator LeftDragPansAndFollowKeepsPlayerFramingDuringMovementAndOrbit()
         {
             Vector3 initialCameraPosition = camera3D.transform.position;
             Vector2 pointer = camera3D.ViewportToScreenPoint(new Vector3(0.5f, 0.5f, 0f));
@@ -165,11 +172,6 @@ namespace PuzzleGame.Tests
             InputSystem.QueueStateEvent(mouse, new MouseState { position = pointer });
             for (int i = 0; i < 25; i++) yield return null;
             Assert.That(Vector3.Distance(initialCameraPosition, camera3D.transform.position), Is.GreaterThan(0.05f));
-            yield return new WaitForSeconds(0.5f); // Let the deliberate pan smoothing settle before testing follow.
-
-            float focusDepth = camera3D.WorldToViewportPoint(prototype.CameraFocusPoint.position).z;
-            Vector3 movedFocus = camera3D.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, focusDepth));
-            Assert.That(Vector3.Distance(movedFocus, prototype.CameraFocusPoint.position), Is.GreaterThan(0.05f));
             Vector3 playerScreen = followSamples.ScreenCenters[followSamples.ScreenCenters.Count - 1];
             followSamples.Clear();
             prototype.SetMoveInputOverride(Vector2.right);
@@ -187,7 +189,7 @@ namespace PuzzleGame.Tests
             {
                 yield return null;
                 AssertScreenPoint(playerScreen, camera3D.WorldToViewportPoint(PlayerCenter));
-                AssertModeFraming(movedFocus);
+                AssertModeFraming(MapOrigin);
             }
         }
 

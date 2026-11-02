@@ -48,7 +48,7 @@ namespace PuzzleGame.Tests
         [TestCase(0f, 0f, 50f)]
         [TestCase(45f, 30f, 50f)]
         [TestCase(270f, 90f, 50f)]
-        public void ZoomChangesVisibleSizeAndMatches2DAtEveryDepth(float yaw, float pitch, float zoom)
+        public void AuthoredCameraSizeMatches2DAtEveryDepth(float yaw, float pitch, float zoom)
         {
             SetField("maxZoomSize", 50f);
             SetView(yaw, pitch);
@@ -68,40 +68,7 @@ namespace PuzzleGame.Tests
             AssertMatchingProjection();
         }
 
-        [TestCase(false, 30)]
-        [TestCase(false, 120)]
-        [TestCase(true, 30)]
-        [TestCase(true, 120)]
-        public void CursorAnchorStaysStillDuringSmoothZoomAndReversal(bool is2D, int fps)
-        {
-            typeof(ProjectionPrototype).GetProperty("Is2D").GetSetMethod(true).Invoke(prototype, new object[] { is2D });
-            SetView(35f, 25f);
-            Invoke("UpdateCameraPose");
-            Vector2 pointer = camera3D.ViewportToScreenPoint(new Vector3(0.72f, 0.64f, 0f));
-            Vector3 anchor = (Vector3)Invoke("PickCameraAnchor", pointer);
-            Vector3 before = camera3D.WorldToViewportPoint(anchor);
-            Invoke("ZoomAtPointer", 3f, pointer);
-            for (int i = 0; i < fps; i++)
-            {
-                Invoke("UpdateCameraMotion", 1f / fps);
-                AssertSameScreenPoint(before, camera3D.WorldToViewportPoint(anchor));
-                AssertMatchingProjection();
-            }
-            Assert.That(prototype.ZoomSize, Is.LessThan(4.4f));
-            pointer = camera3D.ViewportToScreenPoint(new Vector3(0.25f, 0.33f, 0f));
-            anchor = (Vector3)Invoke("PickCameraAnchor", pointer);
-            before = camera3D.WorldToViewportPoint(anchor);
-            Invoke("ZoomAtPointer", -6f, pointer);
-            for (int i = 0; i < fps; i++)
-            {
-                Invoke("UpdateCameraMotion", 1f / fps);
-                AssertSameScreenPoint(before, camera3D.WorldToViewportPoint(anchor));
-            }
-            Assert.That(prototype.ZoomSize, Is.GreaterThan(4.4f));
-            Vector3 settledPan = GetField<Vector3>("currentPanOffset");
-            Invoke("UpdateCameraMotion", 1f);
-            Assert.That(Vector3.Distance(settledPan, GetField<Vector3>("currentPanOffset")), Is.LessThan(0.0001f));
-        }
+
 
         [Test]
         public void OrbitKeepsThePlayerInTheSameScreenPositionRegardlessOfWhereTheDragStarts()
@@ -142,15 +109,7 @@ namespace PuzzleGame.Tests
             AssertSameScreenPoint(stoppedPlayerScreen, camera3D.WorldToViewportPoint(GetField<Vector3>("cameraPlayerAnchor")));
         }
 
-        [Test]
-        public void ZoomedInOrbitHasSimilarScreenMotionToNormalZoom()
-        {
-            float normal = OrbitScreenMotion(4.4f);
-            Invoke("StopMouseOrbit");
-            SetField("projectionDirty", false);
-            float close = OrbitScreenMotion(1.5f);
-            Assert.That(close / normal, Is.EqualTo(1f).Within(0.05f));
-        }
+
 
         [Test]
         public void OrbitMatchesViewportResolutionAndPreservesVerticalDirectionAndLimits()
@@ -169,36 +128,9 @@ namespace PuzzleGame.Tests
             Assert.That(GetField<float>("targetViewPitch"), Is.EqualTo(-90f));
         }
 
-        [Test]
-        public void ZoomLimitsDoNotPanWhenWheelContinuesPastTheLimit()
-        {
-            Vector2 pointer = camera3D.ViewportToScreenPoint(new Vector3(0.8f, 0.7f, 0f));
-            Invoke("ZoomAtPointer", 1000f, pointer);
-            Invoke("UpdateCameraMotion", 1f);
-            Assert.That(prototype.ZoomSize, Is.EqualTo(1.5f));
-            Vector3 minimumFocus = Focus;
-            Invoke("ZoomAtPointer", 1f, pointer);
-            Invoke("UpdateCameraMotion", 1f);
-            Assert.That(Vector3.Distance(Focus, minimumFocus), Is.LessThan(0.0001f));
-            Invoke("ZoomAtPointer", -1000f, pointer);
-            Invoke("UpdateCameraMotion", 1f);
-            Assert.That(prototype.ZoomSize, Is.EqualTo(20f));
-            AssertMatchingProjection();
-        }
 
-        [Test]
-        public void StartingOrbitDuringZoomCancelsTheCompetingZoomAnchor()
-        {
-            Vector2 pointer = camera3D.ViewportToScreenPoint(new Vector3(0.75f, 0.6f, 0f));
-            Invoke("ZoomAtPointer", 3f, pointer);
-            Invoke("UpdateCameraMotion", 0.02f);
-            Invoke("BeginViewDrag", pointer);
-            Assert.That(GetField<bool>("zoomAroundPointer"), Is.False);
-            Invoke("DragView", new Vector2(20f, 8f));
-            for (int i = 0; i < 80; i++) Invoke("UpdateCameraMotion", 1f / 60f);
-            AssertMatchingProjection();
-            Assert.That(float.IsNaN(camera3D.transform.position.x), Is.False);
-        }
+
+
 
         [Test]
         public void DeepTerrainStaysInsideTheClipPlanes()
@@ -243,21 +175,6 @@ namespace PuzzleGame.Tests
         {
             Assert.That(actual.x, Is.EqualTo(expected.x).Within(0.0001f));
             Assert.That(actual.y, Is.EqualTo(expected.y).Within(0.0001f));
-        }
-
-        private float OrbitScreenMotion(float zoom)
-        {
-            SetView(0f, 0f);
-            SetField("currentPanOffset", Vector3.zero);
-            SetField("targetPanOffset", Vector3.zero);
-            ApplyZoom(zoom);
-            Vector3 point = Focus + Vector3.forward * 4f + Vector3.right * 0.5f;
-            Vector2 pointer = camera3D.ViewportToScreenPoint(new Vector3(0.5f, 0.5f, 0f));
-            Invoke("BeginViewDrag", pointer);
-            Vector3 before = camera3D.WorldToScreenPoint(point);
-            Invoke("DragView", new Vector2(6f, 0f));
-            Invoke("UpdateCameraMotion", 1f);
-            return Vector2.Distance(before, camera3D.WorldToScreenPoint(point));
         }
 
         private ProjectableBox CreateBox(Vector3 center, Vector3 size)

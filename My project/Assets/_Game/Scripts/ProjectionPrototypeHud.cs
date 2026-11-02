@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace PuzzleGame
@@ -7,34 +9,48 @@ namespace PuzzleGame
     [ExecuteAlways]
     public sealed class ProjectionPrototypeHud : MonoBehaviour
     {
+        private const string ControlsVisiblePreferenceKey = "PuzzleGame.UI.ControlsVisible";
+
         [Header("Scene bindings")]
         public ProjectionPrototype Prototype;
-        public Text ModeText, YawText, PitchText, SupportText, ModeHintText;
+        public TMP_Text ModeText, YawText, PitchText, ModeHintText;
+        public TMP_Text ControlsText, ClearText;
         public Image ModeBadge, AccentTop;
+        public Color ObjectivePendingColor = new Color(0.88f, 0.93f, 0.97f);
+        public Color ObjectiveCompleteColor = new Color(0.3f, 1f, 0.58f);
         [Header("Optional mode colors")]
         public bool AutoUpdateColors;
         public Color Mode3DColor = new Color(1f, 0.72f, 0.32f);
         public Color Mode2DColor = new Color(0.25f, 0.91f, 0.95f);
-        [Header("Font preview")]
+        [Header("Korean font fallback (editor and runtime)")]
         public bool UseKoreanFallbackFont = true;
+        public TMP_FontAsset KoreanFont;
+        [Header("Controls panel")]
+        public GameObject ControlsRoot;
+        [Tooltip("Used only when no controls visibility preference has been saved.")]
+        public bool ControlsVisibleOnStart = true;
 
-        private readonly List<Text> fontTargets = new List<Text>();
-        private Font fallbackFont;
+        private readonly List<TMP_Text> fontTargets = new List<TMP_Text>();
         private float nextFontCheck;
         private int cachedYaw = int.MinValue, cachedPitch = int.MinValue;
         private string yawLabel, pitchLabel;
+        private bool controlsInitialized;
+        public bool ControlsVisible => ControlsRoot != null && ControlsRoot.activeSelf;
 
         public void Initialize(ProjectionPrototype owner)
         {
             Prototype = owner;
             RepairFallbackFonts();
-            if (Application.isPlaying) UpdateLabels();
+            ProjectionMinimap.AttachTo(owner);
+            RefreshLabels();
         }
 
         private void OnEnable()
         {
             RepairCollapsedCanvas();
             RepairFallbackFonts();
+            controlsInitialized = false;
+            InitializeControls();
         }
 
         private void RepairCollapsedCanvas()
@@ -71,11 +87,55 @@ namespace PuzzleGame
                 nextFontCheck = Time.realtimeSinceStartup + 1f;
                 RepairFallbackFonts();
             }
-            if (Application.isPlaying && Prototype != null) UpdateLabels();
+            if (Application.isPlaying)
+            {
+                InitializeControls();
+                Keyboard keyboard = Keyboard.current;
+                if (keyboard != null && (keyboard.digit5Key.wasPressedThisFrame || keyboard.numpad5Key.wasPressedThisFrame))
+                    ToggleControls();
+                RefreshLabels();
+            }
         }
 
-        private void UpdateLabels()
+        private void InitializeControls()
         {
+            if (controlsInitialized || !Application.IsPlaying(gameObject)) return;
+            if (ControlsRoot == null)
+            {
+                Transform panel = transform.Find("Safe Area/Controls") ?? transform.Find("Controls");
+                if (panel != null) ControlsRoot = panel.gameObject;
+            }
+            if (ControlsRoot == null) return;
+
+            // Restoring a scene must not overwrite the player's saved preference.
+            bool visible = PlayerPrefs.GetInt(ControlsVisiblePreferenceKey, ControlsVisibleOnStart ? 1 : 0) != 0;
+            ControlsRoot.SetActive(visible);
+            controlsInitialized = true;
+        }
+
+        public void ToggleControls()
+        {
+            InitializeControls();
+            SetControlsVisible(!ControlsVisible);
+        }
+
+        public void SetControlsVisible(bool visible)
+        {
+            InitializeControls();
+            if (ControlsRoot == null) return;
+            ControlsRoot.SetActive(visible);
+            if (!Application.IsPlaying(gameObject)) return;
+
+            int value = visible ? 1 : 0;
+            if (PlayerPrefs.HasKey(ControlsVisiblePreferenceKey) &&
+                PlayerPrefs.GetInt(ControlsVisiblePreferenceKey) == value) return;
+            PlayerPrefs.SetInt(ControlsVisiblePreferenceKey, value);
+            PlayerPrefs.Save();
+        }
+
+        public void RefreshLabels()
+        {
+            if (Prototype == null) return;
             SetText(ModeText, Prototype.Is2D ? "2D" : "3D");
             int yaw = Mathf.RoundToInt(Prototype.YawDegrees * 10f);
             if (yaw != cachedYaw)
@@ -91,13 +151,13 @@ namespace PuzzleGame
             }
             SetText(YawText, yawLabel);
             SetText(PitchText, pitchLabel);
-            SetText(SupportText, SupportName());
-            SetText(ModeHintText, Prototype.Is2D
-                ? (Prototype.IsTopDown2D ? "탑뷰 · " : "횡스크롤 · ")
-                    + (Prototype.CanReturnTo3D ? "3D 복귀 가능" : "3D 복귀 위치를 찾으세요")
-                : (Prototype.IsTopDownView ? "R → 탑뷰 2D (WASD)" : "R → 횡스크롤 2D (A/D)"));
-            if (ModeHintText != null && Prototype.Route != null)
-                SetText(ModeHintText, ModeHintText.text + " · " + Prototype.Route.ProgressHint);
+            ProjectionPuzzleStage stage = Prototype.PuzzleStage;
+            int total = stage != null ? stage.RequiredObjectiveCount : 0;
+            int completed = stage != null ? stage.CompletedObjectiveCount : 0;
+            SetText(ModeHintText, "클리어 조건 (" + completed + "/" + total + ")");
+            SetColor(ModeHintText, total > 0 && completed == total
+                ? ObjectiveCompleteColor : ObjectivePendingColor);
+            if (ClearText != null) ClearText.gameObject.SetActive(Prototype.HasWon);
             if (AutoUpdateColors)
             {
                 Color color = Prototype.Is2D ? Mode2DColor : Mode3DColor;
@@ -106,57 +166,29 @@ namespace PuzzleGame
             }
         }
 
-        private string SupportName()
-        {
-            var terrain = Prototype.Terrain;
-            if (terrain != null)
-                for (int i = 0; i < terrain.Count; i++)
-                    if (terrain[i] != null && terrain[i].Id == Prototype.CurrentSupportId)
-                        return terrain[i].gameObject.name;
-            return "없음";
-        }
-
-        private static void SetText(Text target, string value)
+        private static void SetText(TMP_Text target, string value)
         {
             if (target != null && target.text != value) target.text = value;
         }
 
-        private static void SetColor(Image target, Color color)
+        private static void SetColor(Graphic target, Color color)
         {
             if (target != null && target.color != color) target.color = color;
         }
 
         private void RepairFallbackFonts()
         {
-            if (!UseKoreanFallbackFont) return;
+            if (!UseKoreanFallbackFont || KoreanFont == null) return;
             fontTargets.Clear();
             GetComponentsInChildren(true, fontTargets);
             for (int i = 0; i < fontTargets.Count; i++)
             {
-                Text text = fontTargets[i];
-                Font assigned = text.font;
-                if (assigned != null && assigned != fallbackFont && !IsDefaultFont(assigned)) continue;
-                if (fallbackFont == null)
-                {
-                    fallbackFont = Font.CreateDynamicFontFromOSFont(
-                        new[] { "Malgun Gothic", "맑은 고딕", "Noto Sans CJK KR", "Arial" }, 20);
-                    if (fallbackFont == null) return;
-                    fallbackFont.hideFlags = HideFlags.HideAndDontSave;
-                }
-                if (text.font != fallbackFont) text.font = fallbackFont;
+                TMP_Text text = fontTargets[i];
+                TMP_FontAsset assigned = text.font;
+                if (assigned == null || assigned.name.StartsWith("LiberationSans", System.StringComparison.Ordinal))
+                    text.font = KoreanFont;
             }
         }
 
-        private static bool IsDefaultFont(Font value)
-        {
-            return value == Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        }
-
-        private void OnDestroy()
-        {
-            if (fallbackFont == null) return;
-            if (Application.isPlaying) Destroy(fallbackFont);
-            else DestroyImmediate(fallbackFont);
-        }
     }
 }
