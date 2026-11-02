@@ -6,23 +6,83 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Tutorial_CoreMechanics.unity
+    guid: 76976a33a7f4b704583f93c7ae0dd70b
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage01_FirstKey.unity
+    guid: 64b707fd48a66734eb8dabefc4b8fd48
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage02_SideKey.unity
+    guid: af8e68aa5c1bf5443b7f9d42bb4ba4a3
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage03_KeyRelay.unity
+    guid: 1e67f2e8186eab54f93ef7c46f584860
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage04_FirstRail.unity
+    guid: 569059d1f57f45749bc6e5dfc2dd69d6
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage05_RailRelay.unity
+    guid: f36d20a0a470caa46855266df13e391a
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage06_KeyedRail.unity
+    guid: 6d9b54cfef3fa9b428d4617339289e43
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage07_FirstCurrent.unity
+    guid: 464030aeba4803344bcf7be0448b8527
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage08_StoredCurrent.unity
+    guid: def20e7888a3ee743ac3958804af2c10
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage09_RailSupply.unity
+    guid: fcd699756250c3745b58486533b56127
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage10_KeyDetour.unity
+    guid: 08c661e334426bf45be980b431858919
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage11_PoweredTracks.unity
+    guid: 2db6152c7ff279b4d90eed61a1a82b06
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage12_CurrentFork.unity
+    guid: 98adebe52b52f2e49b29e79691d7aa7c
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage13_KeySequence.unity
+    guid: a5eca641eb737bf448febd2be8117c1b
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage14_TrackDependencies.unity
+    guid: e09e158d27c62084983ee3a5e0a16b25
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage15_FinalCircuit.unity
+    guid: f2c5056792d8beb49af1e887f30cd6bf
+  - enabled: 0
     path: Assets/_Game/Scenes/ProjectionPrototype.unity
     guid: ed8e2375ea4575548b9749c9eb686c95
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Game/Scenes/Stages/Stage01_RelayBend.unity
     guid: 6bf213da836142e79ad8af0cf316c108
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Game/Scenes/Stages/Stage02_SpiralAscent.unity
     guid: c58a41d1c3c54390b2d743141c662144
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Game/Scenes/Stages/Stage03_Serpentine.unity
     guid: d9b7a64eb5a74c16955de6e37a504c25
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Game/Scenes/Stages/Stage04_CrossingHeights.unity
     guid: 49e9adfae5f24dcebce9f3d2a87f5f63
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Game/Scenes/Stages/Stage05_LongTraverse.unity
     guid: 11defa92500c44e8a490f1ea7138d123
+  - enabled: 0
+    path: Assets/_Game/Scenes/Mechanics/Stage06_SplitKey.unity
+    guid: 273a0042b9d84c7498e896cb63d4adc6
+  - enabled: 0
+    path: Assets/_Game/Scenes/Mechanics/Stage07_RailSwitch.unity
+    guid: 4ef7ef0eb255c7a428cce17ad233e92c
+  - enabled: 0
+    path: Assets/_Game/Scenes/Mechanics/Stage08_PowerRelay.unity
+    guid: 1e7c1cd13a31a1845a1b4e1041727120
+  - enabled: 0
+    path: Assets/_Game/Scenes/Mechanics/Stage09_RailPowerRelay.unity
+    guid: 303c81b95a317a84ebbc90e406a85a99
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
