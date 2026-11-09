@@ -73,6 +73,91 @@ namespace PuzzleGame.Tests
         }
 
         [UnityTest]
+        public IEnumerator CubeMascotUsesModelStatesAndMirrorsItsFlatWalkSprites()
+        {
+            var model = root.GetComponentInChildren<CubeMascotModel>();
+            Assert.That(model, Is.Not.Null);
+            var player3D = model.GetComponentInParent<PrototypePlayer3D>();
+            var player2D = root.GetComponentInChildren<PrototypePlayer2D>(true);
+            Assert.That(player3D.transform.parent, Is.SameAs(root.transform));
+            Assert.That(player2D.transform.parent, Is.SameAs(root.transform));
+            Assert.That(player3D.GetComponent<CharacterController>().enabled, Is.True);
+            Assert.That(player2D.GetComponent<Rigidbody2D>().simulated, Is.False);
+            Animator animator = model.GetComponent<Animator>();
+            foreach (PlayerAnimationState state in System.Enum.GetValues(typeof(PlayerAnimationState)))
+                Assert.That(animator.HasState(0, Animator.StringToHash("Base Layer." + state)), Is.True, state.ToString());
+
+            yield return WaitForState(PlayerAnimationState.Idle);
+            Quaternion spawnHeading = model.transform.rotation;
+            Assert.That(prototype.SetViewYaw(95f), Is.True);
+            yield return null;
+            Assert.That(Quaternion.Angle(model.transform.rotation, spawnHeading), Is.LessThan(0.1f));
+            Assert.That(prototype.SetViewYaw(0f), Is.True);
+
+            prototype.SetMoveInputOverride(Vector2.right);
+            yield return WaitForState(PlayerAnimationState.Walk);
+            yield return new WaitForSeconds(0.14f);
+            Assert.That(Vector3.Angle(model.transform.forward, Vector3.right), Is.LessThan(1f));
+            Quaternion travelHeading = model.transform.rotation;
+            Transform leftFoot = model.transform.Find("Left Foot");
+            Transform rightFoot = model.transform.Find("Right Foot");
+            Assert.That(leftFoot.localPosition.x - rightFoot.localPosition.x, Is.GreaterThan(0.25f));
+            prototype.SetMoveInputOverride(Vector2.zero);
+            yield return WaitForState(PlayerAnimationState.Idle);
+            prototype.SetJumpInputOverride(true);
+            yield return WaitForState(PlayerAnimationState.Jump);
+            yield return WaitForState(PlayerAnimationState.Fall);
+            yield return WaitForState(PlayerAnimationState.Land);
+            yield return WaitForState(PlayerAnimationState.Idle);
+
+            Assert.That(prototype.TryToggleMode(), Is.True);
+            yield return null;
+            Assert.That(player3D.gameObject.activeInHierarchy, Is.False);
+            Assert.That(player2D.GetComponent<Rigidbody2D>().simulated, Is.True);
+            var sprite = root.GetComponentInChildren<SpriteRenderer>();
+            Assert.That(sprite, Is.Not.Null);
+            Sprite idle = sprite.sprite;
+            Assert.That(idle, Is.Not.Null);
+
+            prototype.SetMoveInputOverride(Vector2.left);
+            yield return new WaitForSeconds(0.12f);
+            Assert.That(sprite.flipX, Is.True);
+            Assert.That(sprite.sprite.rect.y, Is.Not.EqualTo(idle.rect.y));
+            Sprite step = sprite.sprite;
+            yield return new WaitForSeconds(0.1f);
+            Assert.That(sprite.sprite, Is.Not.SameAs(step));
+
+            prototype.SetMoveInputOverride(Vector2.right);
+            yield return new WaitForSeconds(0.12f);
+            Assert.That(sprite.flipX, Is.False);
+            prototype.SetMoveInputOverride(Vector2.zero);
+            yield return new WaitForSeconds(0.1f);
+            float profileIdleRow = sprite.sprite.rect.y;
+            prototype.SetJumpInputOverride(true);
+            yield return new WaitForSeconds(0.08f);
+            Assert.That(prototype.IsGrounded, Is.False);
+            Assert.That(sprite.sprite.rect.y, Is.Not.EqualTo(profileIdleRow));
+            yield return new WaitForSeconds(0.75f);
+            Assert.That(prototype.IsGrounded, Is.True);
+            Assert.That(sprite.sprite.rect.y, Is.EqualTo(profileIdleRow));
+            Assert.That(prototype.TryToggleMode(), Is.True);
+            Assert.That(model.gameObject.activeInHierarchy, Is.True);
+            Assert.That(sprite.gameObject.activeInHierarchy, Is.False);
+            yield return null;
+            Assert.That(Quaternion.Angle(model.transform.rotation, travelHeading), Is.LessThan(0.1f));
+
+            IEnumerator WaitForState(PlayerAnimationState state)
+            {
+                float deadline = Time.realtimeSinceStartup + 2f;
+                string stateName = "Base Layer." + state;
+                while (!animator.GetCurrentAnimatorStateInfo(0).IsName(stateName) &&
+                       Time.realtimeSinceStartup < deadline)
+                    yield return null;
+                Assert.That(animator.GetCurrentAnimatorStateInfo(0).IsName(stateName), Is.True, stateName);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator WheelZoomKeepsPlayerFramingAndRoundTripsWithoutAFramingJump()
         {
             Vector3 target = MapOrigin + new Vector3(0f, -0.5f, -1.5f);
@@ -271,6 +356,31 @@ namespace PuzzleGame.Tests
             prototype.SetMoveInputOverride(Vector2.zero);
             Assert.That(Vector2.Distance(start, prototype.PlayerProjectedFoot), Is.GreaterThan(0.2f));
             foreach (Vector3 sample in followSamples.ScreenCenters) AssertScreenPoint(playerScreen, sample);
+
+            var sprite = root.GetComponentInChildren<CubeMascotSprite>().transform;
+            Quaternion startHeading = sprite.localRotation;
+            Quaternion rightHeading = Quaternion.Euler(0f, 0f, -90f);
+            float previousCaptureDelta = Time.captureDeltaTime;
+            try
+            {
+                Time.captureDeltaTime = 0.01f;
+                prototype.SetMoveInputOverride(Vector2.right);
+                bool sawIntermediateHeading = false;
+                for (int i = 0; i < 16; i++)
+                {
+                    yield return null;
+                    sawIntermediateHeading |= Quaternion.Angle(sprite.localRotation, startHeading) > 1f &&
+                        Quaternion.Angle(sprite.localRotation, rightHeading) > 1f;
+                }
+
+                Assert.That(sawIntermediateHeading, Is.True, "A 90-degree turn should pass through intermediate angles.");
+                Assert.That(Quaternion.Angle(sprite.localRotation, rightHeading), Is.LessThan(0.5f));
+            }
+            finally
+            {
+                Time.captureDeltaTime = previousCaptureDelta;
+                prototype.SetMoveInputOverride(Vector2.zero);
+            }
         }
 
         private Vector3 PlayerCenter => prototype.PlayerWorldFoot + Vector3.up * (PrototypePlayer3D.Height * 0.5f);

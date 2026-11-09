@@ -54,8 +54,6 @@ namespace PuzzleGame
         private Transform projectionRoot;
         private Transform returnMarker;
         private Transform goal2D;
-        private GameObject sidePlayerVisual;
-        private GameObject topPlayerVisual;
         private Material[] projectedMaterials;
         private PhysicsMaterial2D frictionless;
         private ProjectableBox support;
@@ -172,10 +170,16 @@ namespace PuzzleGame
                 Debug.LogError("Add a BoxCollider and ProjectableBox to a platform under Map before playing.", this);
                 return false;
             }
+            var prefab3D = Resources.Load<GameObject>("Players/Player3D");
+            var prefab2D = Resources.Load<GameObject>("Players/Player2D");
+            if (prefab3D == null || prefab2D == null)
+            {
+                Debug.LogError("Both player prefabs are required under Resources/Players.", this);
+                return false;
+            }
             foreach (Transform placed in MapRoot.GetComponentsInChildren<Transform>(true))
                 placed.gameObject.layer = World3DLayer;
             frame = new ProjectionFrame(Vector3.zero, 0f);
-            frictionless = new PhysicsMaterial2D("Prototype frictionless") { friction = 0f, bounciness = 0f };
 
             projectionRoot = NewChild("Generated 2D world", transform);
             projectionBuilder = projectionRoot.gameObject.AddComponent<ProjectionWorldBuilder>();
@@ -183,30 +187,14 @@ namespace PuzzleGame
             for (int i = 0; i < terrain.Count; i++)
                 projectedMaterials[i] = CreateMaterial(terrain[i].BodyColor, true);
 
-            var playerObject = new GameObject("Player 3D", typeof(CharacterController));
-            playerObject.layer = Player3DLayer;
-            playerObject.transform.SetParent(transform, false);
-            player3D = playerObject.AddComponent<PrototypePlayer3D>();
-            GameObject visual3D = CreatePrimitive("Player visual", PrimitiveType.Capsule,
-                playerObject.transform, Vector3.up * 0.9f, new Vector3(0.6f, 0.9f, 0.6f),
-                CreateMaterial(new Color(0.90f, 0.96f, 1f), false), Player3DLayer);
-            Destroy(visual3D.GetComponent<Collider>());
+            GameObject playerObject3D = Instantiate(prefab3D, transform, false);
+            playerObject3D.name = "Player 3D";
+            player3D = playerObject3D.GetComponent<PrototypePlayer3D>();
 
-            var playerObject2D = new GameObject("Player 2D", typeof(Rigidbody2D), typeof(CapsuleCollider2D));
-            playerObject2D.layer = Player2DLayer;
-            playerObject2D.transform.SetParent(transform, false);
-            player2D = playerObject2D.AddComponent<PrototypePlayer2D>();
-            playerObject2D.GetComponent<CapsuleCollider2D>().sharedMaterial = frictionless;
-            GameObject visual2D = CreatePrimitive("Player silhouette", PrimitiveType.Capsule,
-                playerObject2D.transform, Vector3.zero, new Vector3(0.6f, 0.9f, 0.06f),
-                CreateMaterial(new Color(0.93f, 0.99f, 1f), true), Player2DLayer);
-            Destroy(visual2D.GetComponent<Collider>());
-            sidePlayerVisual = visual2D;
-            topPlayerVisual = CreatePrimitive("Top view player", PrimitiveType.Sphere,
-                playerObject2D.transform, Vector3.zero, new Vector3(0.6f, 0.6f, 0.06f),
-                visual2D.GetComponent<Renderer>().sharedMaterial, Player2DLayer);
-            Destroy(topPlayerVisual.GetComponent<Collider>());
-            topPlayerVisual.SetActive(false);
+            GameObject playerObject2D = Instantiate(prefab2D, transform, false);
+            playerObject2D.name = "Player 2D";
+            player2D = playerObject2D.GetComponent<PrototypePlayer2D>();
+            frictionless = playerObject2D.GetComponent<CapsuleCollider2D>().sharedMaterial;
 
             camera3D = CreateCamera("3D camera", (1 << World3DLayer) | (1 << Player3DLayer));
             camera3D.gameObject.tag = "MainCamera";
@@ -594,8 +582,6 @@ namespace PuzzleGame
                 player2D.gameObject.SetActive(true);
                 player2D.SetSimulated(false);
                 player2D.SetTopDown(IsTopDownView, ConstrainTopDownMove);
-                sidePlayerVisual.SetActive(!IsTopDownView);
-                topPlayerVisual.SetActive(IsTopDownView);
                 player2D.Teleport(projectedFoot);
                 if (player2D.HasBlockingOverlap())
                 {
@@ -839,12 +825,10 @@ namespace PuzzleGame
             jumpInputOverride = false;
             player2D.SetSimulated(false);
             player2D.SetTopDown(false);
-            sidePlayerVisual.SetActive(true);
-            topPlayerVisual.SetActive(false);
             player2D.gameObject.SetActive(false);
             projectionRoot.gameObject.SetActive(false);
             player3D.gameObject.SetActive(true);
-            player3D.Teleport(position);
+            player3D.Teleport(position, resetFacing: resetCamera);
             lastAnchor = position;
             support = null;
             UpdateSupport();
@@ -898,7 +882,6 @@ namespace PuzzleGame
         private void OnDestroy()
         {
             foreach (Material material in ownedMaterials) if (material != null) Destroy(material);
-            if (frictionless != null) Destroy(frictionless);
         }
     }
 }
