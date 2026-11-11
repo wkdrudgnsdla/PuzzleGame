@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace PuzzleGame
@@ -42,6 +41,7 @@ namespace PuzzleGame
             Prototype = owner;
             RepairFallbackFonts();
             ProjectionMinimap.AttachTo(owner);
+            ApplyReboundControls();
             RefreshLabels();
         }
 
@@ -90,8 +90,7 @@ namespace PuzzleGame
             if (Application.isPlaying)
             {
                 InitializeControls();
-                Keyboard keyboard = Keyboard.current;
-                if (keyboard != null && (keyboard.digit5Key.wasPressedThisFrame || keyboard.numpad5Key.wasPressedThisFrame))
+                if (GameInput.Action("Controls").WasPressedThisFrame())
                     ToggleControls();
                 RefreshLabels();
             }
@@ -111,6 +110,44 @@ namespace PuzzleGame
             bool visible = PlayerPrefs.GetInt(ControlsVisiblePreferenceKey, ControlsVisibleOnStart ? 1 : 0) != 0;
             ControlsRoot.SetActive(visible);
             controlsInitialized = true;
+        }
+
+        private void ApplyReboundControls()
+        {
+            if (!GameInput.HasOverrides || ControlsRoot == null) return;
+            string guide = $"이동  {GameInput.MoveKeys}\n점프  {GameInput.KeyName("Jump")}\n" +
+                $"차원 전환  {GameInput.KeyName("SwitchDimension")}\n화면 이동  {GameInput.KeyName("Pan")} 드래그\n" +
+                $"회전  {GameInput.KeyName("Orbit")} 드래그 · 휠 줌\n재시작  {GameInput.KeyName("Restart")}";
+            Transform panel = ControlsRoot.transform;
+            SetText(panel.Find("Controls Close Text")?.GetComponent<TMP_Text>(),
+                $"{GameInput.KeyName("Controls")} / {GameInput.KeyName("Controls", 1)} 키로 조작 안내 표시 전환");
+            if (ControlsText != null)
+            {
+                SetText(ControlsText, guide);
+                return;
+            }
+
+            Transform icons = panel.Find("Key images");
+            Transform labels = panel.Find("Controls Text");
+            if (icons == null || labels == null) return;
+            icons.gameObject.SetActive(false);
+            labels.gameObject.SetActive(false);
+            var keys = new GameObject("Current Bindings", typeof(RectTransform), typeof(TextMeshProUGUI));
+            keys.transform.SetParent(panel, false);
+            var rect = (RectTransform)keys.transform;
+            rect.anchorMin = new Vector2(0f, 0.5f);
+            rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.offsetMin = new Vector2(16f, -60f);
+            rect.offsetMax = new Vector2(-16f, 60f);
+            var text = keys.GetComponent<TextMeshProUGUI>();
+            text.font = KoreanFont != null ? KoreanFont : TMP_Settings.defaultFontAsset;
+            text.fontSize = 14f;
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 9f;
+            text.fontSizeMax = 14f;
+            text.alignment = TextAlignmentOptions.MidlineLeft;
+            text.raycastTarget = false;
+            text.text = guide;
         }
 
         public void ToggleControls()

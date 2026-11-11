@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using TMPro;
 
@@ -17,21 +16,31 @@ namespace PuzzleGame
         public TMP_Text ClearText;
 
         private bool loadingNext;
+        private string clearPrompt, dimension, orbit, movementHint, horizontalKeys;
 
         private void Start()
         {
             if (Prototype == null) Prototype = GetComponent<ProjectionPrototype>();
+            GamePreferences.RecordCampaignVisit();
             if (ClearText == null && Prototype != null && Prototype.Hud != null)
                 ClearText = Prototype.Hud.ClearText;
+            clearPrompt = string.IsNullOrWhiteSpace(NextSceneName) ? "모든 스테이지를 클리어했습니다"
+                : $"{GameInput.KeyName("Continue")} 키로 다음 스테이지 이동";
+            if (IsTutorial)
+            {
+                dimension = GameInput.KeyName("SwitchDimension");
+                orbit = GameInput.KeyName("Orbit");
+                movementHint = $"{GameInput.MoveKeys} 이동 · {GameInput.KeyName("Jump")} 점프 · " +
+                    $"{GameInput.KeyName("Pan")} 드래그로 화면 이동 · 휠 줌 · {orbit} 드래그로 회전";
+                horizontalKeys = $"{GameInput.KeyName("Move", 3)} / {GameInput.KeyName("Move", 4)}";
+            }
             if (TutorialText != null) TutorialText.gameObject.SetActive(IsTutorial);
         }
 
         private void Update()
         {
             if (Prototype == null || !Prototype.HasWon || loadingNext) return;
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame ||
-                keyboard.numpadEnterKey.wasPressedThisFrame)) Continue();
+            if (GameInput.Action("Continue").WasPressedThisFrame()) Continue();
         }
 
         private void LateUpdate()
@@ -40,10 +49,7 @@ namespace PuzzleGame
             // Keep the objective counter visible even after reaching the exit.
             if (Prototype.HasWon && ClearText != null)
             {
-                string message = string.IsNullOrWhiteSpace(NextSceneName)
-                    ? "모든 스테이지를 클리어했습니다"
-                    : "Enter를 눌러 다음스테이지로 이동";
-                SetText(ClearText, message);
+                SetText(ClearText, clearPrompt);
                 ClearText.gameObject.SetActive(true);
             }
             if (IsTutorial && TutorialText != null)
@@ -69,26 +75,25 @@ namespace PuzzleGame
 
         private string TutorialHint()
         {
-            if (Prototype.HasWon) return "튜토리얼 완료!\nEnter를 눌러 1스테이지로 이동하세요.";
             ProjectionPuzzleMechanic next = NearbyTutorialMechanic();
             if (next is ProjectionKeyPuzzle key)
             {
                 if (Prototype.Is2D)
-                    return key.IsAligned ? "완성된 열쇠에 몸을 닿게 하여 획득하세요.\nR: 3D로 돌아가기"
-                        : "R로 3D로 돌아가 열쇠 조각을 먼저 맞추세요.\n우클릭 드래그: 시점 조절";
-                return "WASD·Space 이동/점프 · 좌클 드래그 화면 이동 · 휠 줌 · 우클 드래그 회전\n열쇠 조각을 맞추고 R → 2D에서 열쇠에 닿으세요.";
+                    return key.IsAligned ? $"완성된 열쇠에 몸을 닿게 하여 획득하세요.\n{dimension} 키로 3D 복귀"
+                        : $"{dimension} 키로 3D에 돌아가 열쇠 조각을 먼저 맞추세요.\n{orbit} 드래그로 시점 조절";
+                return $"{movementHint}\n열쇠 조각을 맞추고 {dimension} 키로 전환한 뒤 2D에서 열쇠에 닿으세요.";
             }
             if (next is ProjectionRailSwitch rail)
             {
                 if (Prototype.Is2D && !rail.IsAligned)
-                    return "레일 끝이 아직 이어지지 않았습니다.\nR로 돌아가 레일 끝을 먼저 맞추세요.";
+                    return $"레일 끝이 아직 이어지지 않았습니다.\n{dimension} 키로 돌아가 레일 끝을 먼저 맞추세요.";
                 return Prototype.Is2D
                     ? Prototype.IsTopDown2D
-                        ? "스위치 진행 방향의 뒤에 서서 WASD로 미세요.\n모퉁이에서는 새 방향의 뒤로 돌아서 미세요 · R: 3D 복귀"
-                        : "초록 스위치를 몸으로 밀어 노란 끝점까지 보내세요.\nA/D: 밀기 · R: 3D로 돌아가기"
+                        ? $"스위치 진행 방향의 뒤에서 이동 키로 미세요.\n모퉁이에서는 새 방향의 뒤로 돌아서 미세요 · {dimension} 키로 3D 복귀"
+                        : $"초록 스위치를 몸으로 밀어 노란 끝점까지 보내세요.\n{horizontalKeys} 밀기 · {dimension} 키로 3D 복귀"
                     : rail.AllowCornerJoints
-                        ? "위를 내려다보며 레일 끝을 맞추고 R로 탑뷰에 들어가세요.\n상하 40° 이상: 탑뷰 · WASD로 꺾인 선로를 따라 미세요."
-                        : "다음 발판의 레일 끝을 맞추고 R로 2D에 들어가세요.\n초록 스위치를 몸으로 밀어 노란 끝점까지 보내세요.";
+                        ? $"위를 내려다보며 레일 끝을 맞추고 {dimension} 키로 탑뷰에 들어가세요.\n상하 40° 이상에서 이동 키로 꺾인 선로를 따라 미세요."
+                        : $"다음 발판의 레일 끝을 맞추고 {dimension} 키로 2D에 들어가세요.\n초록 스위치를 몸으로 밀어 노란 끝점까지 보내세요.";
             }
             if (next is ProjectionPowerNetwork power)
             {
@@ -110,7 +115,7 @@ namespace PuzzleGame
                     ? "파란 에너지가 전선 끝까지 차오르면 다음 전원이 켜집니다.\n발판을 옮기지 않아도 충전됩니다 · 미니맵으로 위치를 확인하세요."
                     : "어느 발판에서든 파란 전원의 전선 끝을 맞추고 R을 누르세요.\n충전 후 다른 각도를 맞춰 다음 전원으로 이어 보내세요.";
             }
-            return "모든 장치를 익혔습니다.\nR로 3D로 돌아가 초록 출구에 도착하세요.";
+            return $"모든 장치를 익혔습니다.\n{dimension} 키로 3D에 돌아가 초록 출구에 도착하세요.";
         }
 
         private ProjectionPuzzleMechanic NearbyTutorialMechanic()

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 
 namespace PuzzleGame
@@ -119,16 +118,17 @@ namespace PuzzleGame
             {
                 if (!initialized) return "월드를 준비하는 중입니다.";
                 if (Time.unscaledTime < messageUntil) return message;
-                if (HasWon) return PuzzleStage != null ? "스테이지 클리어! Backspace: 다시 시작"
-                    : "성공! 2D에서 건넌 이동이 실제 3D 위치에 반영됐습니다. Backspace: 다시 시작";
+                if (HasWon) return $"스테이지 클리어! {GameInput.KeyName("Restart")} 키로 다시 시작";
+                string dimension = GameInput.KeyName("SwitchDimension");
                 if (IsTopDown2D) return CanReturnTo3D
-                    ? "탑뷰 2D · WASD로 바닥을 이동하고 R로 현재 위치에서 3D로 돌아가세요."
+                    ? $"탑뷰 2D · 이동 키로 이동하고 {dimension} 키로 현재 위치에서 3D로 돌아가세요."
                     : "탑뷰 2D · 복귀 공간을 확보하려면 바닥 안쪽으로 조금 이동하세요.";
                 if (!IsGrounded) return "공중에서는 전환할 수 없습니다. 발판에 착지하세요.";
-                if (Is2D) return CanReturnTo3D ? "복귀 가능 · R을 눌러 현재 발판의 3D 위치로 돌아가세요."
+                if (Is2D) return CanReturnTo3D ? $"복귀 가능 · {dimension} 키로 현재 발판의 3D 위치로 돌아가세요."
                     : "복귀 공간이 부족합니다. 발판 안쪽으로 조금 더 이동하세요.";
-                if (IsTopDownView) return "탑뷰 시점 · R로 중력 없는 2D 평면 이동에 들어가세요.";
-                return "좌클릭 드래그로 화면 이동 · 휠로 확대·축소 · 우클릭 드래그로 회전 · R로 차원 전환";
+                if (IsTopDownView) return $"탑뷰 시점 · {dimension} 키로 2D 평면 이동에 들어가세요.";
+                return $"{GameInput.KeyName("Pan")} 드래그로 화면 이동 · 휠 줌 · " +
+                    $"{GameInput.KeyName("Orbit")} 드래그로 회전 · {dimension} 키로 차원 전환";
             }
         }
 
@@ -136,9 +136,20 @@ namespace PuzzleGame
         {
             if (!InitializeWorld()) { enabled = false; return; }
             initialized = true;
+            GameInput.Gameplay.Enable();
             if (Route != null) Route.Initialize(this);
             if (PuzzleStage != null) PuzzleStage.Initialize(this);
             ResetPrototype();
+        }
+
+        private void OnEnable()
+        {
+            if (initialized) GameInput.Gameplay.Enable();
+        }
+
+        private void OnDisable()
+        {
+            if (initialized) GameInput.Gameplay.Disable();
         }
 
         private bool InitializeWorld()
@@ -270,19 +281,14 @@ namespace PuzzleGame
         private void Update()
         {
             if (!initialized) return;
-            Keyboard keyboard = Keyboard.current;
-            Vector2 movement = moveInputOverride ?? ReadMovement(keyboard);
-            bool jump = jumpInputOverride || (keyboard != null &&
-                keyboard.spaceKey.wasPressedThisFrame);
+            Vector2 movement = moveInputOverride ?? GameInput.Action("Move").ReadValue<Vector2>();
+            bool jump = jumpInputOverride || GameInput.Action("Jump").WasPressedThisFrame();
             jumpInputOverride = false;
-            if (keyboard != null)
-            {
-                if (keyboard.backspaceKey.wasPressedThisFrame) { ResetPrototype(); return; }
-                if (keyboard.escapeKey.wasPressedThisFrame && !Application.isEditor) Application.Quit();
-            }
+            if (GameInput.Action("Restart").WasPressedThisFrame()) { ResetPrototype(); return; }
+            if (GameInput.Action("Exit").WasPressedThisFrame() && !Application.isEditor) Application.Quit();
 
             UpdateCameraInput();
-            if (keyboard != null && keyboard.rKey.wasPressedThisFrame) TryToggleMode();
+            if (GameInput.Action("SwitchDimension").WasPressedThisFrame()) TryToggleMode();
 
             if (PuzzleStage != null) PuzzleStage.Tick(frame, Is2D, movement, Time.deltaTime, HasWon);
             UpdatePuzzleExitState();
@@ -344,22 +350,24 @@ namespace PuzzleGame
 
         private void UpdateCameraInput()
         {
-            Mouse mouse = Mouse.current;
-            if (mouse != null)
+            var pointerAction = GameInput.Action("Pointer");
+            if (pointerAction.controls.Count > 0)
             {
-                Vector2 pointer = mouse.position.ReadValue();
+                Vector2 pointer = pointerAction.ReadValue<Vector2>();
+                var orbit = GameInput.Action("Orbit");
+                var pan = GameInput.Action("Pan");
                 bool overUi = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
                 if (!overUi)
                 {
-                    float scroll = mouse.scroll.ReadValue().y;
+                    float scroll = GameInput.Action("Zoom").ReadValue<float>();
                     float steps = Mathf.Abs(scroll) > 10f ? scroll / 120f : scroll;
                     if (!Mathf.Approximately(steps, 0f)) AdjustZoom(steps);
                 }
-                if (!Is2D && !overUi && mouse.rightButton.wasPressedThisFrame)
+                if (!Is2D && !overUi && orbit.WasPressedThisFrame())
                 {
                     BeginViewDrag(pointer);
                 }
-                if (!overUi && mouse.leftButton.wasPressedThisFrame && !mouse.rightButton.isPressed)
+                if (!overUi && pan.WasPressedThisFrame() && !orbit.IsPressed())
                 {
                     StopMouseOrbit();
                     panningCamera = true;
@@ -371,7 +379,7 @@ namespace PuzzleGame
                     Vector2 delta = pointer - lastDragPosition;
                     DragView(delta);
                     lastDragPosition = pointer;
-                    if (!mouse.rightButton.isPressed) draggingView = false;
+                    if (!orbit.IsPressed()) draggingView = false;
                 }
                 if (panningCamera)
                 {
@@ -380,7 +388,7 @@ namespace PuzzleGame
                     float unitsPerPixel = 2f * currentZoomSize / Mathf.Max(1, activeCamera.pixelHeight);
                     targetPanOffset -= new Vector3(delta.x, delta.y, 0f) * (unitsPerPixel * panSensitivity);
                     lastPanPosition = pointer;
-                    if (!mouse.leftButton.isPressed) panningCamera = false;
+                    if (!pan.IsPressed()) panningCamera = false;
                 }
             }
             else if (draggingView || panningCamera) StopMouseOrbit();
@@ -468,14 +476,6 @@ namespace PuzzleGame
         private void OnApplicationFocus(bool focused)
         {
             if (!focused) StopMouseOrbit();
-        }
-
-        private static Vector2 ReadMovement(Keyboard keyboard)
-        {
-            if (keyboard == null) return Vector2.zero;
-            return Vector2.ClampMagnitude(new Vector2(
-                (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0),
-                (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0)), 1f);
         }
 
         private void UpdateSupport()
@@ -595,7 +595,7 @@ namespace PuzzleGame
                 player2D.SetSimulated(true);
                 camera2DFollowDepth = frame.Depth(cameraPlayerAnchor);
                 Is2D = true;
-                Notify(IsTopDown2D ? "탑뷰 2D · WASD로 바닥 안에서 자유롭게 이동하세요."
+                Notify(IsTopDown2D ? "탑뷰 2D · 이동 키로 바닥 안에서 자유롭게 이동하세요."
                     : "사이드뷰 2D · 화면에서 연결된 발판을 걸어서 건널 수 있습니다.");
             }
             else
@@ -625,7 +625,7 @@ namespace PuzzleGame
             StopMouseOrbit();
             ApplyView(yaw);
             targetViewYaw = currentViewYaw;
-            Notify("시점 " + Mathf.RoundToInt(YawDegrees) + "° · R로 2D 연결을 확인하세요.");
+            Notify($"시점 {Mathf.RoundToInt(YawDegrees)}° · {GameInput.KeyName("SwitchDimension")} 키로 2D 연결을 확인하세요.");
             return true;
         }
 
@@ -814,7 +814,7 @@ namespace PuzzleGame
             if (PuzzleStage != null) PuzzleStage.ResetProgress();
             ResetPlayerAt(Spawn, resetCamera: true);
             UpdatePuzzleExitState();
-            Notify("시작 위치 · 마우스로 시점을 잡고 R로 차원 전환, SPACE로 점프하세요.");
+            Notify($"시작 위치 · {GameInput.KeyName("SwitchDimension")} 키로 차원 전환 · {GameInput.KeyName("Jump")} 키로 점프");
         }
 
         private void ResetPlayerAt(Vector3 position, bool resetCamera = false)
