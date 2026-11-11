@@ -133,12 +133,11 @@ namespace PuzzleGame.Editor
 
         private static void ConfigureBuildScene()
         {
-            var scenes = new List<EditorBuildSettingsScene>
-            {
-                new EditorBuildSettingsScene(ScenePath, true)
-            };
+            var scenes = new List<EditorBuildSettingsScene>();
             foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
                 if (scene.path != ScenePath) scenes.Add(scene);
+            int mainMenu = scenes.FindIndex(scene => scene.enabled && scene.path == MainMenuController.ScenePath);
+            scenes.Insert(mainMenu + 1, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
         }
 

@@ -411,7 +411,10 @@ namespace PuzzleGame.Editor
 
         private static void ConfigureBuildScenes()
         {
-            var scenes=new List<EditorBuildSettingsScene>{new EditorBuildSettingsScene(PathFor(CampaignStageCatalog.Tutorial),true)};
+            var scenes=new List<EditorBuildSettingsScene>();
+            if (File.Exists(MainMenuController.ScenePath))
+                scenes.Add(new EditorBuildSettingsScene(MainMenuController.ScenePath, true));
+            scenes.Add(new EditorBuildSettingsScene(PathFor(CampaignStageCatalog.Tutorial),true));
             foreach(CampaignStageSpec spec in CampaignStageCatalog.Stages)scenes.Add(new EditorBuildSettingsScene(PathFor(spec),true));
             var campaignPaths=new HashSet<string>(scenes.Select(s=>s.path));
             foreach(EditorBuildSettingsScene old in EditorBuildSettings.scenes)

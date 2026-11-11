@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_Game/Scenes/MainMenu.unity
+    guid: 856e330a9ba45d74db06cdff2d4642fe
+  - enabled: 1
     path: Assets/_Game/Scenes/Campaign/Tutorial_CoreMechanics.unity
     guid: 76976a33a7f4b704583f93c7ae0dd70b
   - enabled: 1
