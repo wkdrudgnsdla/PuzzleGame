@@ -4,7 +4,7 @@
 
 - Unity 프로젝트: `My project/`
 
-실제 플레이용 별도 튜토리얼과 1~15스테이지는 `Assets/_Game/Scenes/Campaign/`에 있다. **Puzzle Game > Play Campaign > 00 Tutorial**부터 시작하며, 클리어 후 Enter로 다음 스테이지로 이동한다. [캠페인 구성과 난이도 안내](docs/CampaignStages.md)를 참고한다.
+튜토리얼과 1~15스테이지는 `Assets/_Game/Scenes/Campaign/`에 있다. 메인 메뉴에서 **게임 시작**을 누르면 플레이 기록이 없는 경우 튜토리얼로, 기록이 있는 경우 1스테이지로 이동한다. 기록은 캠페인 씬에 입장할 때 저장한다. [캠페인 구성과 난이도 안내](docs/CampaignStages.md)를 참고한다.
 
 이전 투영 프로토타입과 도전 맵 5개는 실험·참고용으로 유지한다. `Assets/_Game/Scenes/Stages/`의 예전 맵은 **Puzzle Game > Stages**에서 열 수 있다. [이전 도전 맵 안내](docs/ChallengeStages.md)를 참고한다.
 
@@ -15,12 +15,14 @@
 ## 실행
 
 1. Unity Hub에서 `My project/`를 연다. 프로젝트 에디터 버전은 Unity `6000.0.68f1`이다.
-2. 스크립트 컴파일이 끝나면 **Puzzle Game > Play Campaign > 00 Tutorial**을 선택한다. 01~15 메뉴로 각 실제 스테이지를 직접 열 수도 있다.
-3. **Play**를 누르고 Game 창을 선택한다. 튜토리얼에서만 간단한 설명을 보여주며, 클리어 후 Enter로 다음 스테이지에 들어간다. 원본 맵은 씬에 저장되어 있고 Play 시 재생성하지 않는다.
+2. `Assets/_Game/Scenes/MainMenu.unity`를 열고 **Play**를 누른다. 특정 스테이지를 편집할 때는 **Puzzle Game > Play Campaign**에서 해당 씬을 직접 열 수 있다.
+3. 메인 메뉴의 **설정**에서 전체 볼륨을 조절하고 조작 키를 바꿀 수 있다. 변경할 항목을 선택한 뒤 새 키를 누르고, 취소하려면 Esc를 누른다. 설정은 다음 실행에도 적용된다.
 
-Build Settings는 튜토리얼과 실제 1~15스테이지만 활성화한다. 예전 프로토타입·실험 맵은 파일과 에디터 메뉴를 유지하며 빌드 목록에서는 비활성화한다. 접합부는 원본 3D 블록에 가려지면 정렬되어도 연결되지 않으며, 전선 절단면은 작은 발판 바깥으로 노출되어 있다.
+빌드는 메인 메뉴로 시작하며 튜토리얼과 1~15스테이지를 포함한다. **스테이지 선택**에서 방향키로 00(튜토리얼)부터 15까지 고르고 Enter로 시작하거나, Esc로 메인 메뉴에 돌아간다. 예전 프로토타입과 실험 맵은 에디터 메뉴에서 열 수 있다. 기본 조작은 `Assets/_Game/Resources/FoldwayGameplay.inputactions`에서 편집할 수 있다.
 
 ## 맵 편집
+
+접합부는 원본 3D 블록에 가려지면 정렬되어도 연결되지 않으며, 전선 절단면은 작은 발판 바깥으로 노출되어 있다.
 
 Play를 끈 상태에서 Hierarchy의 **Map / Platforms** 아래 발판을 선택해 이동하거나 크기를 바꾼다. `Ctrl+D`로 복제해 발판을 추가할 수 있다. `ProjectableBox`와 `BoxCollider`가 붙은 박스가 2D 투영 지형 대상이다.
 
