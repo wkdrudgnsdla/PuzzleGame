@@ -16,16 +16,29 @@ namespace PuzzleGame
         public TMP_Text ClearText;
 
         private bool loadingNext;
+        private bool finalClearShown;
         private string clearPrompt, dimension, orbit, movementHint, horizontalKeys;
+
+        private bool IsFinalStage => string.IsNullOrWhiteSpace(NextSceneName);
 
         private void Start()
         {
             if (Prototype == null) Prototype = GetComponent<ProjectionPrototype>();
             GamePreferences.RecordCampaignVisit();
-            if (ClearText == null && Prototype != null && Prototype.Hud != null)
-                ClearText = Prototype.Hud.ClearText;
-            clearPrompt = string.IsNullOrWhiteSpace(NextSceneName) ? "모든 스테이지를 클리어했습니다"
-                : $"{GameInput.KeyName("Continue")} 키로 다음 스테이지 이동";
+            if (Prototype != null && Prototype.Hud != null)
+            {
+                if (ClearText == null) ClearText = Prototype.Hud.ClearText;
+                Prototype.Hud.ConfigureCampaignStage(StageNumber, IsFinalStage);
+                if (IsTutorial && TutorialText != null)
+                    Prototype.Hud.GetComponent<ProjectionHudLayout>()?.SetTutorialHint(TutorialText);
+            }
+            RefreshInputLabels();
+            if (TutorialText != null) TutorialText.gameObject.SetActive(IsTutorial);
+        }
+
+        internal void RefreshInputLabels()
+        {
+            if (!IsFinalStage) clearPrompt = $"{GameInput.KeyName("Continue")} 키로 다음 스테이지 이동";
             if (IsTutorial)
             {
                 dimension = GameInput.KeyName("SwitchDimension");
@@ -34,23 +47,34 @@ namespace PuzzleGame
                     $"{GameInput.KeyName("Pan")} 드래그로 화면 이동 · 휠 줌 · {orbit} 드래그로 회전";
                 horizontalKeys = $"{GameInput.KeyName("Move", 3)} / {GameInput.KeyName("Move", 4)}";
             }
-            if (TutorialText != null) TutorialText.gameObject.SetActive(IsTutorial);
         }
 
         private void Update()
         {
-            if (Prototype == null || !Prototype.HasWon || loadingNext) return;
+            if (Prototype == null || !Prototype.isActiveAndEnabled || !Prototype.HasWon || loadingNext || IsFinalStage) return;
             if (GameInput.Action("Continue").WasPressedThisFrame()) Continue();
         }
 
         private void LateUpdate()
         {
-            if (Prototype == null) return;
-            // Keep the objective counter visible even after reaching the exit.
-            if (Prototype.HasWon && ClearText != null)
+            if (Prototype == null || !Prototype.isActiveAndEnabled) return;
+            if (Prototype.HasWon)
             {
-                SetText(ClearText, clearPrompt);
-                ClearText.gameObject.SetActive(true);
+                if (IsFinalStage)
+                {
+                    if (!finalClearShown && Prototype.Hud != null)
+                    {
+                        CampaignClearDialog.Show(Prototype.Hud, () => LoadScene(MainMenuController.ScenePath));
+                        finalClearShown = true;
+                        Prototype.enabled = false;
+                        if (ClearText != null) ClearText.gameObject.SetActive(false);
+                    }
+                }
+                else if (ClearText != null)
+                {
+                    SetText(ClearText, clearPrompt);
+                    ClearText.gameObject.SetActive(true);
+                }
             }
             if (IsTutorial && TutorialText != null)
             {
@@ -62,15 +86,20 @@ namespace PuzzleGame
         /// <summary>Can also be bound to an authored button. Incomplete stages cannot be skipped.</summary>
         public void Continue()
         {
-            if (Prototype == null || !Prototype.HasWon || loadingNext ||
-                string.IsNullOrWhiteSpace(NextSceneName)) return;
-            if (!Application.CanStreamedLevelBeLoaded(NextSceneName))
+            if (Prototype == null || !Prototype.isActiveAndEnabled || !Prototype.HasWon || IsFinalStage) return;
+            LoadScene(NextSceneName);
+        }
+
+        private void LoadScene(string scene)
+        {
+            if (loadingNext) return;
+            if (!Application.CanStreamedLevelBeLoaded(scene))
             {
-                Debug.LogError("Campaign next scene is not registered in Build Settings: " + NextSceneName, this);
+                Debug.LogError("Campaign destination is not registered in Build Settings: " + scene, this);
                 return;
             }
             loadingNext = true;
-            SceneManager.LoadSceneAsync(NextSceneName, LoadSceneMode.Single);
+            SceneManager.LoadSceneAsync(scene, LoadSceneMode.Single);
         }
 
         private string TutorialHint()

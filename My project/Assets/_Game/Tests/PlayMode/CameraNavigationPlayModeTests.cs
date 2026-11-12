@@ -37,9 +37,8 @@ namespace PuzzleGame.Tests
             root = new GameObject("Camera navigation test world");
             root.SetActive(false);
             prototype = root.AddComponent<ProjectionPrototype>();
-            // This fixture's flat test map uses a front view independently of campaign defaults.
-            typeof(ProjectionPrototype).GetField("initialYawDegrees", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(prototype, 0f);
-            typeof(ProjectionPrototype).GetField("initialPitchDegrees", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(prototype, 0f);
+            yield return ProjectionTestWorld.AssignPlayerPrefabs(prototype);
+            ProjectionTestWorld.SetInitialFrontView(prototype);
             prototype.MapRoot = Child("Map", Vector3.zero);
             CreatePlatform(1, MapOrigin + new Vector3(0f, -1f, 0f));
             CreatePlatform(2, MapOrigin + new Vector3(8f, -1f, 4f));

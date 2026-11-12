@@ -94,15 +94,6 @@
           "processors": "",
           "interactions": "",
           "initialStateCheck": false
-        },
-        {
-          "name": "Exit",
-          "type": "Button",
-          "id": "39d2715a-2b21-4eb7-9000-00000000000c",
-          "expectedControlType": "Button",
-          "processors": "",
-          "interactions": "",
-          "initialStateCheck": false
         }
       ],
       "bindings": [
@@ -279,17 +270,6 @@
           "processors": "",
           "groups": "",
           "action": "Controls",
-          "isComposite": false,
-          "isPartOfComposite": false
-        },
-        {
-          "name": "",
-          "id": "39d2715a-2b21-4eb7-9000-00000000001d",
-          "path": "<Keyboard>/escape",
-          "interactions": "",
-          "processors": "",
-          "groups": "",
-          "action": "Exit",
           "isComposite": false,
           "isPartOfComposite": false
         }

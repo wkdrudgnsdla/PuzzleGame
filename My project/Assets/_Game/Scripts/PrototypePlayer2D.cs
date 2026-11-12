@@ -67,6 +67,12 @@ namespace PuzzleGame
             jumpQueued |= !topDown && jump;
         }
 
+        internal void ClearInput()
+        {
+            movement = Vector2.zero;
+            jumpQueued = false;
+        }
+
         public void SetTopDown(bool topDown, System.Func<Vector2, Vector2, Vector2> constrainMove = null)
         {
             this.topDown = topDown;

@@ -14,13 +14,6 @@ namespace PuzzleGame
         public const string ScenePath = "Assets/_Game/Scenes/MainMenu.unity";
 
         [Serializable]
-        public struct BindingView
-        {
-            public Button Button;
-            public TMP_Text Value;
-        }
-
-        [Serializable]
         public struct StageView
         {
             public string SceneName;
@@ -38,16 +31,12 @@ namespace PuzzleGame
         public Slider VolumeSlider;
         public TMP_Text VolumeValue, BindingStatus;
         public InputSystemUIInputModule MenuInput;
-        public BindingView[] Bindings;
+        public SettingsBindingView[] Bindings;
 
         private readonly InputAction keypadSubmit = new InputAction("Menu Keypad Submit", InputActionType.Button,
             "<Keyboard>/numpadEnter");
-        private InputActionRebindingExtensions.RebindingOperation rebind;
-        private int resumeMenuInputFrame = -1;
-        private Button reboundButton;
-        private string rebindResult;
+        private GameSettingsSession settings;
         private bool loading;
-        private bool volumeDirty;
         private int focusedStage = -1;
         private static readonly Color StageFill = new Color32(54, 50, 54, 255);
         private static readonly Color StageLabel = new Color32(222, 214, 208, 255);
@@ -70,15 +59,8 @@ namespace PuzzleGame
             SettingsButton.onClick.AddListener(OpenSettings);
             QuitButton.onClick.AddListener(Quit);
             BackButton.onClick.AddListener(CloseSettings);
-            ResetBindingsButton.onClick.AddListener(ResetBindings);
-            VolumeSlider.SetValueWithoutNotify(GamePreferences.MasterVolume);
-            ShowVolume(VolumeSlider.value);
-            VolumeSlider.onValueChanged.AddListener(ChangeVolume);
-            for (int i = 0; i < Bindings.Length; i++)
-            {
-                int row = i;
-                Bindings[row].Button.onClick.AddListener(() => BeginRebind(row));
-            }
+            settings = new GameSettingsSession(VolumeSlider, VolumeValue, BindingStatus, ResetBindingsButton,
+                Bindings, MenuInput);
             HomePanel.SetActive(true);
             SettingsPanel.SetActive(false);
             StageSelectPanel.SetActive(false);
@@ -87,16 +69,7 @@ namespace PuzzleGame
 
         private void Update()
         {
-            if (loading) return;
-            if (resumeMenuInputFrame >= 0 && Time.frameCount >= resumeMenuInputFrame)
-            {
-                resumeMenuInputFrame = -1;
-                MenuInput.enabled = true;
-                Select(reboundButton.gameObject);
-                reboundButton = null;
-                return;
-            }
-            if (rebind != null || !MenuInput.enabled) return;
+            if (loading || settings.ConsumesMenuInput() || !MenuInput.enabled) return;
             if (MenuInput.cancel != null && MenuInput.cancel.action.WasPressedThisFrame())
             {
                 if (SettingsPanel.activeSelf) CloseSettings();
@@ -133,7 +106,7 @@ namespace PuzzleGame
             loading = true;
             HomePanel.SetActive(false);
             StageSelectPanel.SetActive(false);
-            SaveVolume();
+            settings.SaveVolume();
             SceneManager.LoadSceneAsync(scene, LoadSceneMode.Single);
         }
 
@@ -177,106 +150,32 @@ namespace PuzzleGame
         {
             HomePanel.SetActive(false);
             SettingsPanel.SetActive(true);
-            BindingStatus.text = "변경할 항목을 선택하세요.";
-            RefreshBindings();
-            Select(VolumeSlider.gameObject);
+            settings.Open();
         }
 
         private void CloseSettings()
         {
-            SaveVolume();
+            settings.Close();
             SettingsPanel.SetActive(false);
             HomePanel.SetActive(true);
             Select(SettingsButton.gameObject);
         }
 
-        private void ChangeVolume(float value)
-        {
-            GamePreferences.MasterVolume = value;
-            volumeDirty = true;
-            ShowVolume(value);
-        }
-
-        private void ShowVolume(float value) => VolumeValue.text = $"{Mathf.RoundToInt(value * 100f)}%";
-
-        private void SaveVolume()
-        {
-            if (!volumeDirty) return;
-            PlayerPrefs.Save();
-            volumeDirty = false;
-        }
-
         private void OnApplicationFocus(bool focused)
         {
-            if (!focused) SaveVolume();
-        }
-
-        private void RefreshBindings()
-        {
-            for (int i = 0; i < Bindings.Length; i++)
-            {
-                var key = GameInput.RebindableKeys[i];
-                Bindings[i].Value.text = GameInput.KeyName(key.ActionName, key.Index);
-            }
-        }
-
-        private void BeginRebind(int row)
-        {
-            if (rebind != null || resumeMenuInputFrame >= 0) return;
-            var key = GameInput.RebindableKeys[row];
-            InputAction action = GameInput.Action(key.ActionName);
-            MenuInput.enabled = false;
-            reboundButton = Bindings[row].Button;
-            BindingStatus.text = key.AllowsMouse ? "키나 마우스 버튼을 누르세요. Esc로 취소" : "새 키를 누르세요. Esc로 취소";
-            rebind = action.PerformInteractiveRebinding(key.Index)
-                .WithControlsHavingToMatchPath("<Keyboard>")
-                .WithExpectedControlType("Button")
-                .WithCancelingThrough("<Keyboard>/escape")
-                .OnApplyBinding((operation, path) =>
-                {
-                    if (GameInput.IsInUse(action, key.Index, operation.selectedControl))
-                    {
-                        rebindResult = "이미 사용 중인 키입니다.";
-                        return;
-                    }
-                    action.ApplyBindingOverride(key.Index, path);
-                    GameInput.SaveOverrides();
-                    rebindResult = "키 바인딩을 저장했습니다.";
-                })
-                .OnComplete(operation => FinishRebind(operation, rebindResult))
-                .OnCancel(operation => FinishRebind(operation, "키 바인딩 변경을 취소했습니다."));
-            if (key.AllowsMouse)
-                rebind.WithControlsHavingToMatchPath("<Mouse>").WithControlsExcluding("<Mouse>/scroll");
-            rebind.Start();
-        }
-
-        private void FinishRebind(InputActionRebindingExtensions.RebindingOperation operation, string message)
-        {
-            operation.Dispose();
-            rebind = null;
-            resumeMenuInputFrame = Time.frameCount + 1;
-            RefreshBindings();
-            BindingStatus.text = message;
-        }
-
-        private void ResetBindings()
-        {
-            GameInput.ResetOverrides();
-            RefreshBindings();
-            BindingStatus.text = "기본 키로 복원했습니다.";
+            if (!focused) settings?.SaveVolume();
         }
 
         private void Quit()
         {
-            SaveVolume();
+            settings.SaveVolume();
             Application.Quit();
         }
 
         private void OnDestroy()
         {
-            rebind?.Dispose();
             keypadSubmit.Dispose();
-            SaveVolume();
+            settings?.Dispose();
         }
 
         private static void Select(GameObject target) => EventSystem.current?.SetSelectedGameObject(target);

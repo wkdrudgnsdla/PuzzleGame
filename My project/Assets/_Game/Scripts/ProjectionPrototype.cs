@@ -15,6 +15,10 @@ namespace PuzzleGame
         public Material SurfaceTemplate;
         public Material FlatTemplate;
 
+        [Header("Player prefabs")]
+        public GameObject Player3DPrefab;
+        public GameObject Player2DPrefab;
+
         [Header("Scene map")]
         public Transform MapRoot;
         public Transform SpawnPoint;
@@ -57,6 +61,8 @@ namespace PuzzleGame
         private PhysicsMaterial2D frictionless;
         private ProjectableBox support;
         private Vector3 lastAnchor;
+        private Vector3? returnPreview;
+        private int returnPreviewFrame = -1;
         private Vector2? moveInputOverride;
         private bool jumpInputOverride;
         private bool initialized;
@@ -110,7 +116,9 @@ namespace PuzzleGame
             !Is2D ? player3D.Foot : ReturnPreviewFoot ?? lastAnchor;
         public Vector2 PlayerProjectedFoot => !initialized ? Vector2.zero :
             Is2D ? player2D.Foot : frame.Project(player3D.Foot);
-        public Vector3? ReturnPreviewFoot => TryGetReturnFoot(out Vector3 foot) ? foot : (Vector3?)null;
+        public Vector3? ReturnPreviewFoot => Is2D && returnPreviewFrame == Time.frameCount
+            ? returnPreview
+            : TryGetReturnFoot(out Vector3 foot) ? foot : (Vector3?)null;
         public bool CanReturnTo3D => Is2D && TryGetReturnFoot(out _);
         public string StatusMessage
         {
@@ -140,6 +148,7 @@ namespace PuzzleGame
             if (Route != null) Route.Initialize(this);
             if (PuzzleStage != null) PuzzleStage.Initialize(this);
             ResetPrototype();
+            if (Hud != null) Hud.gameObject.AddComponent<GamePauseMenu>().Initialize(this, Hud);
         }
 
         private void OnEnable()
@@ -152,8 +161,21 @@ namespace PuzzleGame
             if (initialized) GameInput.Gameplay.Disable();
         }
 
+        internal void SuspendGameplay()
+        {
+            StopMouseOrbit();
+            jumpInputOverride = false;
+            player2D.ClearInput();
+            enabled = false;
+        }
+
         private bool InitializeWorld()
         {
+            if (Player3DPrefab == null || Player2DPrefab == null)
+            {
+                Debug.LogError("Assign the 3D and 2D player prefabs to ProjectionPrototype before playing.", this);
+                return false;
+            }
             if (MapRoot == null)
             {
                 Debug.LogError("Assign the scene's Map object to ProjectionPrototype.MapRoot before playing.", this);
@@ -181,13 +203,6 @@ namespace PuzzleGame
                 Debug.LogError("Add a BoxCollider and ProjectableBox to a platform under Map before playing.", this);
                 return false;
             }
-            var prefab3D = Resources.Load<GameObject>("Players/Player3D");
-            var prefab2D = Resources.Load<GameObject>("Players/Player2D");
-            if (prefab3D == null || prefab2D == null)
-            {
-                Debug.LogError("Both player prefabs are required under Resources/Players.", this);
-                return false;
-            }
             foreach (Transform placed in MapRoot.GetComponentsInChildren<Transform>(true))
                 placed.gameObject.layer = World3DLayer;
             frame = new ProjectionFrame(Vector3.zero, 0f);
@@ -198,11 +213,11 @@ namespace PuzzleGame
             for (int i = 0; i < terrain.Count; i++)
                 projectedMaterials[i] = CreateMaterial(terrain[i].BodyColor, true);
 
-            GameObject playerObject3D = Instantiate(prefab3D, transform, false);
+            GameObject playerObject3D = Instantiate(Player3DPrefab, transform, false);
             playerObject3D.name = "Player 3D";
             player3D = playerObject3D.GetComponent<PrototypePlayer3D>();
 
-            GameObject playerObject2D = Instantiate(prefab2D, transform, false);
+            GameObject playerObject2D = Instantiate(Player2DPrefab, transform, false);
             playerObject2D.name = "Player 2D";
             player2D = playerObject2D.GetComponent<PrototypePlayer2D>();
             frictionless = playerObject2D.GetComponent<CapsuleCollider2D>().sharedMaterial;
@@ -285,8 +300,6 @@ namespace PuzzleGame
             bool jump = jumpInputOverride || GameInput.Action("Jump").WasPressedThisFrame();
             jumpInputOverride = false;
             if (GameInput.Action("Restart").WasPressedThisFrame()) { ResetPrototype(); return; }
-            if (GameInput.Action("Exit").WasPressedThisFrame() && !Application.isEditor) Application.Quit();
-
             UpdateCameraInput();
             if (GameInput.Action("SwitchDimension").WasPressedThisFrame()) TryToggleMode();
 
@@ -306,9 +319,11 @@ namespace PuzzleGame
                 (Route == null || !Route.RequireCompletionForExit || Route.IsComplete) &&
                 (PuzzleStage == null || PuzzleStage.ObjectivesComplete)) HasWon = true;
 
-            Vector3? preview = ReturnPreviewFoot;
-            returnMarker.gameObject.SetActive(Is2D && preview.HasValue);
-            if (preview.HasValue) returnMarker.position = preview.Value + Vector3.up * 0.02f;
+            // Share the result after movement and support resolution with the minimap render.
+            returnPreview = TryGetReturnFoot(out Vector3 foot) ? foot : (Vector3?)null;
+            returnPreviewFrame = Time.frameCount;
+            returnMarker.gameObject.SetActive(returnPreview.HasValue);
+            if (returnPreview.HasValue) returnMarker.position = returnPreview.Value + Vector3.up * 0.02f;
         }
 
         private void LateUpdate()
@@ -480,6 +495,7 @@ namespace PuzzleGame
 
         private void UpdateSupport()
         {
+            returnPreviewFrame = -1;
             if (IsTopDown2D)
             {
                 support = FindTopDownSupport(player2D.Foot, out Vector3 worldFoot);
@@ -534,14 +550,8 @@ namespace PuzzleGame
                 if (!ProjectionMath.TryResolveBoxTopPoint(support.SourceCollider, frame, player2D.Foot,
                     PrototypePlayer3D.Radius + 0.08f, out foot)) return false;
             }
-            else
-            {
-                if (!ProjectionMath.TryGetProjectedSurface(support.SourceCollider, frame, player2D.Foot.x,
-                    out float surfaceHeight, out _)) return false;
-                if (!ProjectionMath.TryResolveBoxTop(support.SourceCollider, frame,
-                    new Vector2(player2D.Foot.x, surfaceHeight),
-                    PrototypePlayer3D.Radius + 0.08f, lastAnchor, out foot)) return false;
-            }
+            else if (!ProjectionMath.TryResolveBoxTopOnSurface(support.SourceCollider, frame,
+                player2D.Foot.x, PrototypePlayer3D.Radius + 0.08f, lastAnchor, out foot)) return false;
             // Shrink slightly and lift off the floor: touching the support is allowed.
             float radius = PrototypePlayer3D.Radius - 0.015f;
             Vector3 bottom = foot + Vector3.up * (PrototypePlayer3D.Radius + 0.025f);
@@ -679,6 +689,7 @@ namespace PuzzleGame
 
         private void RebuildProjection()
         {
+            returnPreviewFrame = -1;
             projectionBuilder.Rebuild(terrain, frame, projectedMaterials, frictionless, World2DLayer, IsTopDownView);
             // A valid low platform may project below world y=-5 when looking downward.
             // Use the projected map bounds so descending circuits do not trigger a false fall.

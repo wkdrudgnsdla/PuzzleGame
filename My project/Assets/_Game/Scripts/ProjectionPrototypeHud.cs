@@ -14,6 +14,8 @@ namespace PuzzleGame
         public ProjectionPrototype Prototype;
         public TMP_Text ModeText, YawText, PitchText, ModeHintText;
         public TMP_Text ControlsText, ClearText;
+        [Tooltip("Optional TMP label in the HUD prefab for the current campaign stage number.")]
+        public TMP_Text StageText;
         public Image ModeBadge, AccentTop;
         public Color ObjectivePendingColor = new Color(0.88f, 0.93f, 0.97f);
         public Color ObjectiveCompleteColor = new Color(0.3f, 1f, 0.58f);
@@ -34,6 +36,11 @@ namespace PuzzleGame
         private int cachedYaw = int.MinValue, cachedPitch = int.MinValue;
         private string yawLabel, pitchLabel;
         private bool controlsInitialized;
+        private bool useFinalClearDialog;
+        private TMP_Text reboundGuide, controlsHint;
+        private Transform defaultControlIcons, defaultControlLabels;
+        private string defaultGuideText, defaultHintText;
+        private bool capturedControlDefaults, showDefaultIcons, showDefaultLabels;
         public bool ControlsVisible => ControlsRoot != null && ControlsRoot.activeSelf;
 
         public void Initialize(ProjectionPrototype owner)
@@ -41,8 +48,15 @@ namespace PuzzleGame
             Prototype = owner;
             RepairFallbackFonts();
             ProjectionMinimap.AttachTo(owner);
-            ApplyReboundControls();
+            RefreshControlBindings();
             RefreshLabels();
+        }
+
+        internal void ConfigureCampaignStage(int stageNumber, bool finalStage)
+        {
+            useFinalClearDialog = finalStage;
+            if (StageText != null)
+                SetText(StageText, stageNumber > 0 ? $"스테이지 {stageNumber}" : string.Empty);
         }
 
         private void OnEnable()
@@ -112,14 +126,36 @@ namespace PuzzleGame
             controlsInitialized = true;
         }
 
-        private void ApplyReboundControls()
+        internal void RefreshControlBindings()
         {
-            if (!GameInput.HasOverrides || ControlsRoot == null) return;
+            if (ControlsRoot == null) return;
+            Transform panel = ControlsRoot.transform;
+            if (!capturedControlDefaults)
+            {
+                controlsHint = panel.Find("Controls Close Text")?.GetComponent<TMP_Text>();
+                defaultControlIcons = panel.Find("Key images");
+                defaultControlLabels = panel.Find("Controls Text");
+                defaultGuideText = ControlsText != null ? ControlsText.text : null;
+                defaultHintText = controlsHint != null ? controlsHint.text : null;
+                showDefaultIcons = defaultControlIcons != null && defaultControlIcons.gameObject.activeSelf;
+                showDefaultLabels = defaultControlLabels != null && defaultControlLabels.gameObject.activeSelf;
+                capturedControlDefaults = true;
+            }
+
+            if (!GameInput.HasOverrides)
+            {
+                SetText(controlsHint, defaultHintText);
+                SetText(ControlsText, defaultGuideText);
+                if (reboundGuide != null) reboundGuide.gameObject.SetActive(false);
+                if (defaultControlIcons != null) defaultControlIcons.gameObject.SetActive(showDefaultIcons);
+                if (defaultControlLabels != null) defaultControlLabels.gameObject.SetActive(showDefaultLabels);
+                return;
+            }
+
             string guide = $"이동  {GameInput.MoveKeys}\n점프  {GameInput.KeyName("Jump")}\n" +
                 $"차원 전환  {GameInput.KeyName("SwitchDimension")}\n화면 이동  {GameInput.KeyName("Pan")} 드래그\n" +
                 $"회전  {GameInput.KeyName("Orbit")} 드래그 · 휠 줌\n재시작  {GameInput.KeyName("Restart")}";
-            Transform panel = ControlsRoot.transform;
-            SetText(panel.Find("Controls Close Text")?.GetComponent<TMP_Text>(),
+            SetText(controlsHint,
                 $"{GameInput.KeyName("Controls")} / {GameInput.KeyName("Controls", 1)} 키로 조작 안내 표시 전환");
             if (ControlsText != null)
             {
@@ -127,27 +163,24 @@ namespace PuzzleGame
                 return;
             }
 
-            Transform icons = panel.Find("Key images");
-            Transform labels = panel.Find("Controls Text");
-            if (icons == null || labels == null) return;
-            icons.gameObject.SetActive(false);
-            labels.gameObject.SetActive(false);
-            var keys = new GameObject("Current Bindings", typeof(RectTransform), typeof(TextMeshProUGUI));
-            keys.transform.SetParent(panel, false);
-            var rect = (RectTransform)keys.transform;
-            rect.anchorMin = new Vector2(0f, 0.5f);
-            rect.anchorMax = new Vector2(1f, 0.5f);
-            rect.offsetMin = new Vector2(16f, -60f);
-            rect.offsetMax = new Vector2(-16f, 60f);
-            var text = keys.GetComponent<TextMeshProUGUI>();
-            text.font = KoreanFont != null ? KoreanFont : TMP_Settings.defaultFontAsset;
-            text.fontSize = 14f;
-            text.enableAutoSizing = true;
-            text.fontSizeMin = 9f;
-            text.fontSizeMax = 14f;
-            text.alignment = TextAlignmentOptions.MidlineLeft;
-            text.raycastTarget = false;
-            text.text = guide;
+            if (defaultControlIcons == null || defaultControlLabels == null) return;
+            defaultControlIcons.gameObject.SetActive(false);
+            defaultControlLabels.gameObject.SetActive(false);
+            if (reboundGuide == null)
+            {
+                reboundGuide = OverlayUi.CreateLabel("Current Bindings", panel, KoreanFont, "", 14f, Color.white);
+                RectTransform rect = reboundGuide.rectTransform;
+                rect.anchorMin = new Vector2(0f, 0.5f);
+                rect.anchorMax = new Vector2(1f, 0.5f);
+                rect.offsetMin = new Vector2(16f, -60f);
+                rect.offsetMax = new Vector2(-16f, 60f);
+                reboundGuide.enableAutoSizing = true;
+                reboundGuide.fontSizeMin = 9f;
+                reboundGuide.fontSizeMax = 14f;
+                reboundGuide.alignment = TextAlignmentOptions.MidlineLeft;
+            }
+            reboundGuide.gameObject.SetActive(true);
+            SetText(reboundGuide, guide);
         }
 
         public void ToggleControls()
@@ -194,7 +227,7 @@ namespace PuzzleGame
             SetText(ModeHintText, "클리어 조건 (" + completed + "/" + total + ")");
             SetColor(ModeHintText, total > 0 && completed == total
                 ? ObjectiveCompleteColor : ObjectivePendingColor);
-            if (ClearText != null) ClearText.gameObject.SetActive(Prototype.HasWon);
+            if (ClearText != null) ClearText.gameObject.SetActive(Prototype.HasWon && !useFinalClearDialog);
             if (AutoUpdateColors)
             {
                 Color color = Prototype.Is2D ? Mode2DColor : Mode3DColor;

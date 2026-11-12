@@ -12,6 +12,15 @@ namespace PuzzleGame.Editor
     {
         public const string ScenePath = "Assets/_Game/Scenes/ProjectionPrototype.unity";
 
+        internal static void AssignPlayerPrefabs(ProjectionPrototype prototype)
+        {
+            const string folder = "Assets/_Game/Prefabs/Players/";
+            prototype.Player3DPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(folder + "Player3D.prefab");
+            prototype.Player2DPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(folder + "Player2D.prefab");
+            if (prototype.Player3DPrefab == null || prototype.Player2DPrefab == null)
+                throw new InvalidOperationException("Both player prefabs are required under " + folder);
+        }
+
         [MenuItem("Puzzle Game/Open Projection Prototype")]
         public static void OpenPrototypeScene()
         {
@@ -84,6 +93,7 @@ namespace PuzzleGame.Editor
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var root = new GameObject("Projection Prototype");
             var prototype = root.AddComponent<ProjectionPrototype>();
+            AssignPlayerPrefabs(prototype);
             prototype.SurfaceTemplate = LoadOrCreateMaterial("PrototypeSurface", "Universal Render Pipeline/Lit", false);
             prototype.FlatTemplate = LoadOrCreateMaterial("PrototypeFlat", "Universal Render Pipeline/Unlit", true);
 

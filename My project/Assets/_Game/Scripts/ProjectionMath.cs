@@ -185,6 +185,30 @@ namespace PuzzleGame
             float inset,
             Vector3 previousAnchor,
             out Vector3 worldFoot)
+            => TryResolveBoxTop(box, frame, projectedFoot, inset, previousAnchor, false, out worldFoot);
+
+        internal static bool TryResolveBoxTopOnSurface(
+            BoxCollider box,
+            ProjectionFrame frame,
+            float horizontal,
+            float inset,
+            Vector3 previousAnchor,
+            out Vector3 worldFoot)
+        {
+            worldFoot = default;
+            return TryGetProjectedSurface(box, frame, horizontal, out float height, out _) &&
+                TryResolveBoxTop(box, frame, new Vector2(horizontal, height), inset, previousAnchor,
+                    true, out worldFoot);
+        }
+
+        private static bool TryResolveBoxTop(
+            BoxCollider box,
+            ProjectionFrame frame,
+            Vector2 projectedFoot,
+            float inset,
+            Vector3 previousAnchor,
+            bool surfaceHeightKnown,
+            out Vector3 worldFoot)
         {
             worldFoot = default;
             if (box == null || !IsFinite(inset) || inset < 0f ||
@@ -233,8 +257,9 @@ namespace PuzzleGame
             }
             else
             {
-                if (!TryGetProjectedSurface(box, frame, projectedFoot.x, out float surfaceHeight, out _) ||
-                    Mathf.Abs(projectedFoot.y - surfaceHeight) > 0.12f)
+                if (!surfaceHeightKnown &&
+                    (!TryGetProjectedSurface(box, frame, projectedFoot.x, out float surfaceHeight, out _) ||
+                    Mathf.Abs(projectedFoot.y - surfaceHeight) > 0.12f))
                     return false;
                 preferredDepth = (projectedFoot.y - baseHeight) / heightPerDepth;
             }

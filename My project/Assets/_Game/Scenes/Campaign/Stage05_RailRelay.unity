@@ -1047,6 +1047,8 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   SurfaceTemplate: {fileID: 2100000, guid: 55dd10b710c9e214fb2e116ee52205cc, type: 2}
   FlatTemplate: {fileID: 2100000, guid: 3db722c216e03ff4392ff39fdba6ba30, type: 2}
+  Player3DPrefab: {fileID: 8163896220626593425, guid: 94f05a876a1777640bee0630753b69d3, type: 3}
+  Player2DPrefab: {fileID: 5420036461574216198, guid: 799856438539b534f8bdfde52d0516c6, type: 3}
   MapRoot: {fileID: 1725019551}
   SpawnPoint: {fileID: 1039290013}
   ExitPoint: {fileID: 1034030890}

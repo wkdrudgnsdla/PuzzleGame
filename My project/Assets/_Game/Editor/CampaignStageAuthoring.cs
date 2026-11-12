@@ -167,6 +167,7 @@ namespace PuzzleGame.Editor
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var root = new GameObject(spec.Title);
             ProjectionPrototype owner = root.AddComponent<ProjectionPrototype>();
+            ProjectionPrototypeTools.AssignPlayerPrefabs(owner);
             owner.SurfaceTemplate = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Game/Materials/PrototypeSurface.mat");
             owner.FlatTemplate = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Game/Materials/PrototypeFlat.mat");
             ProjectionPuzzleStage stage = root.AddComponent<ProjectionPuzzleStage>();

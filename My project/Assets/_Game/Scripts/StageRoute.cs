@@ -46,7 +46,7 @@ namespace PuzzleGame
 
         private void Update()
         {
-            if (Prototype == null || IsComplete || Prototype.Is2D || !Prototype.IsGrounded) return;
+            if (Prototype == null || !Prototype.isActiveAndEnabled || IsComplete || Prototype.Is2D || !Prototype.IsGrounded) return;
             if (!RequireCompletionForExit && CheckpointPlatforms != null)
             {
                 // Optional respawn points need no marker touch or visits to earlier markers.

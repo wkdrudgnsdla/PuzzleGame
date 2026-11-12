@@ -29,7 +29,16 @@ namespace PuzzleGame.Tests
                 Object.Destroy(existing.gameObject);
             yield return null;
 
-            prototype = new GameObject("Projection Prototype Test").AddComponent<ProjectionPrototype>();
+            var root = new GameObject("Projection Prototype Test");
+            root.SetActive(false);
+            prototype = root.AddComponent<ProjectionPrototype>();
+            yield return ProjectionTestWorld.AssignPlayerPrefabs(prototype);
+            ProjectionTestWorld.SetInitialFrontView(prototype);
+            prototype.MapRoot = new GameObject("Map").transform;
+            prototype.MapRoot.SetParent(root.transform, false);
+            CreatePlatform(1, new Vector3(0f, -0.5f, 0f));
+            CreatePlatform(2, new Vector3(8f, -0.5f, 4f));
+            root.SetActive(true);
             yield return null;
             prototype.SetMoveInputOverride(Vector2.zero);
             yield return fixedUpdate;
@@ -37,6 +46,16 @@ namespace PuzzleGame.Tests
             yield return null;
 
             Check(prototype.IsGrounded, Is.True, "The player must settle on platform A before each test.");
+        }
+
+        private void CreatePlatform(int id, Vector3 center)
+        {
+            var platform = new GameObject("Platform " + id);
+            platform.transform.SetParent(prototype.MapRoot, false);
+            platform.transform.localPosition = center;
+            platform.transform.localScale = new Vector3(4f, 1f, 3f);
+            platform.AddComponent<BoxCollider>();
+            platform.AddComponent<ProjectableBox>().Initialize(id, Color.white);
         }
 
         [UnityTearDown]
