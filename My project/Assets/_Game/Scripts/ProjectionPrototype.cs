@@ -11,6 +11,7 @@ namespace PuzzleGame
         public const int World2DLayer = 9;
         public const int Player3DLayer = 10;
         public const int Player2DLayer = 11;
+        private const double DimensionSwitchCooldownSeconds = 0.7;
 
         public Material SurfaceTemplate;
         public Material FlatTemplate;
@@ -66,6 +67,7 @@ namespace PuzzleGame
         private Vector2? moveInputOverride;
         private bool jumpInputOverride;
         private bool initialized;
+        private double dimensionSwitchAvailableAt;
         private float messageUntil;
         private string message;
         private bool draggingView;
@@ -100,6 +102,8 @@ namespace PuzzleGame
             + frame.Forward * (cameraFramingOffset.z + currentPanOffset.z);
 
         public bool Is2D { get; private set; }
+        public float DimensionSwitchCooldownRemaining =>
+            Mathf.Max(0f, (float)(dimensionSwitchAvailableAt - Time.unscaledTimeAsDouble));
         public float YawDegrees => frame.Yaw;
         public float PitchDegrees => frame.Pitch;
         public float ZoomSize => currentZoomSize;
@@ -574,6 +578,14 @@ namespace PuzzleGame
         public bool TryToggleMode()
         {
             if (!initialized) return false;
+            float remaining = DimensionSwitchCooldownRemaining;
+            if (remaining > 0f)
+            {
+                string direction = Is2D ? "2D → 3D" : "3D → 2D";
+                float displaySeconds = Mathf.Ceil(remaining * 10f) / 10f;
+                return RejectDimensionSwitch($"{direction} 전환 쿨타임이 {displaySeconds:0.0}초 남았습니다.");
+            }
+
             UpdateCameraFollow();
             UpdateSupport();
             if (!IsGrounded || support == null)
@@ -634,6 +646,8 @@ namespace PuzzleGame
             RebaseCameraFollow();
             camera3D.enabled = !Is2D;
             camera2D.enabled = Is2D;
+            dimensionSwitchAvailableAt = Time.unscaledTimeAsDouble + DimensionSwitchCooldownSeconds;
+            DimensionRipple.Play(Is2D ? camera2D : camera3D, Is2D);
             GameAudioEvents.Play(Is2D ? SoundCue.DimensionTo2D : SoundCue.DimensionTo3D);
             return true;
         }
@@ -841,6 +855,7 @@ namespace PuzzleGame
         public void ResetPrototype()
         {
             if (!initialized) return;
+            dimensionSwitchAvailableAt = 0d;
             if (Route != null) Route.ResetProgress();
             if (PuzzleStage != null) PuzzleStage.ResetProgress();
             ResetPlayerAt(Spawn, resetCamera: true);
@@ -851,6 +866,8 @@ namespace PuzzleGame
 
         private void ResetPlayerAt(Vector3 position, bool resetCamera = false)
         {
+            DimensionRipple.Clear(camera3D);
+            DimensionRipple.Clear(camera2D);
             Is2D = false;
             HasWon = false;
             moveInputOverride = null;

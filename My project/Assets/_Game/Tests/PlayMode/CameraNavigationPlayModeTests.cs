@@ -199,6 +199,7 @@ namespace PuzzleGame.Tests
                 AssertModeFraming(target);
             }
             Assert.That(prototype.ZoomSize, Is.GreaterThan(zoomBefore2DWheel));
+            yield return new WaitUntil(() => prototype.DimensionSwitchCooldownRemaining <= 0f);
             Assert.That(prototype.TryToggleMode(), Is.True, prototype.StatusMessage);
             Assert.That(prototype.Is2D, Is.False);
             Assert.That(camera3D.enabled, Is.True);
