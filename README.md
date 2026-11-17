@@ -1,83 +1,154 @@
-# PuzzleGame
+<div align="center">
 
-카메라 시점에 따라 달라지는 2D 지형과 3D 공간을 오가며 푸는 퍼즐 게임.
+# 폴드웨이 · Foldway
 
-- Unity 프로젝트: `My project/`
+### 시점을 돌려 길을 잇고, 3D와 2D를 오가는 퍼즐 게임
 
-튜토리얼과 1~15스테이지는 `Assets/_Game/Scenes/Campaign/`에 있다. 메인 메뉴의 **게임 시작**은 튜토리얼을 클리어하기 전에는 튜토리얼을, 클리어한 뒤에는 1스테이지를 연다. **이어하기**는 옆에 표시된 마지막 입장 스테이지의 시작 지점에서 다시 시작한다. 스테이지에 입장할 때 즉시 저장하므로 강제 종료 후에도 해당 스테이지를 이어서 열 수 있다. [캠페인 구성과 난이도 안내](docs/CampaignStages.md)를 참고한다.
+<p>
+  <img src="https://img.shields.io/badge/Unity-6000.0.68f1-000000?style=flat-square&logo=unity&logoColor=white" alt="Unity 6000.0.68f1">
+  <img src="https://img.shields.io/badge/C%23-239120?style=flat-square&logo=csharp&logoColor=white" alt="C#">
+  <img src="https://img.shields.io/badge/URP-17.0.4-4C8BF5?style=flat-square&logo=unity&logoColor=white" alt="URP 17.0.4">
+</p>
 
-이전 투영 프로토타입과 도전 맵 5개는 실험·참고용으로 유지한다. `Assets/_Game/Scenes/Stages/`의 예전 맵은 **Puzzle Game > Stages**에서 열 수 있다. [이전 도전 맵 안내](docs/ChallengeStages.md)를 참고한다.
+3D에서 카메라를 돌려 떨어진 발판과 장치를 맞추고, 2D로 전환해 길을 건너세요.<br>
+열쇠를 맞추고, 레일 스위치를 밀고, 전선을 이어 출구를 엽니다.
 
-이전 기믹 예제 4개는 `Assets/_Game/Scenes/Mechanics/`에 남겨 두었다. **Puzzle Game > Mechanic Stages**에서 열 수 있으며 [이전 기믹 예제 안내](docs/MechanicStages.md)를 참고한다. 실제 1~15스테이지는 **Play Campaign** 메뉴를 사용한다.
+</div>
 
-이전 기믹 예제 7·8·9도 독립된 발판 구조로 유지하며, 전선 구간은 위에서 아래로 진행한다. 모든 기믹은 서 있는 발판과 무관하게 표시·동작한다. 전선은 어디에서든 2D 접합이 맞으면 충전하고, 레일은 몸이 닿는 스위치를 민다. 체크포인트는 복귀 지점을 자동 저장하는 용도로만 사용한다.
+---
 
-## 실행
+## 🎬 게임 플레이 영상
 
-1. Unity Hub에서 `My project/`를 연다. 프로젝트 에디터 버전은 Unity `6000.0.68f1`이다.
-2. `Assets/_Game/Scenes/MainMenu.unity`를 열고 **Play**를 누른다. 특정 스테이지를 편집할 때는 **Puzzle Game > Play Campaign**에서 해당 씬을 직접 열 수 있다.
-3. 메인 메뉴와 일시정지의 **설정**에서 전체 볼륨과 카메라 회전 감도를 조절하고 조작 키를 바꿀 수 있다. 회전 감도 슬라이더를 왼쪽으로 옮기면 같은 거리로 드래그했을 때 카메라가 덜 회전한다. 키 변경은 항목을 선택한 뒤 새 키를 누르고, 취소하려면 Esc를 누른다. 설정은 다음 실행에도 적용된다.
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=EXByOno_9-4">
+    <img src="docs/images/main-menu.png" width="800" alt="폴드웨이 메인 메뉴 이미지로 YouTube 플레이 영상 열기">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=EXByOno_9-4">YouTube에서 게임 플레이 영상 보기</a>
+</div>
 
-빌드는 메인 메뉴로 시작하며 튜토리얼과 1~15스테이지를 포함한다. **스테이지 선택**에서 방향키로 00(튜토리얼)부터 15까지 고르고 Enter로 시작하거나, Esc로 메인 메뉴에 돌아간다. 예전 프로토타입과 실험 맵은 에디터 메뉴에서 열 수 있다. 기본 조작은 `Assets/_Game/Resources/FoldwayGameplay.inputactions`에서 편집할 수 있다.
+---
 
-튜토리얼은 단계마다 게임을 멈추고 다음 조작을 설명한다. **연습 시작**을 누르면 게임이 재개되고, 이동·점프·시점 회전과 열쇠·레일·전선의 동작을 직접 수행하면 다음 설명으로 넘어간다.
+## 📸 게임 화면
 
-BGM 6곡은 직전 곡을 제외하고 무작위로 고르며, 메인 메뉴와 스테이지 사이를 이동해도 현재 곡이 이어진다. 일시정지와 튜토리얼 설명 중에는 BGM 볼륨이 낮아지고, 레일 이동음과 전선 충전음은 동작 중에만 들린다. **전체 볼륨**은 BGM과 효과음에 모두 적용된다.
+### 3D에서 2D로 전환 · 열쇠 퍼즐
 
-## 맵 편집
+튜토리얼에서는 3D 공간에 흩어진 열쇠 조각을 시점 회전으로 맞춥니다. `R`로 횡스크롤 2D에 들어가면, 화면에서 이어진 열쇠를 획득할 수 있습니다.
 
-접합부는 원본 3D 블록에 가려지면 정렬되어도 연결되지 않으며, 전선 절단면은 작은 발판 바깥으로 노출되어 있다.
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/key-3d.png" width="100%" alt="3D에서 서로 다른 발판에 놓인 열쇠 조각"></td>
+    <td width="50%" align="center"><img src="docs/images/key-2d.png" width="100%" alt="횡스크롤 2D에서 초록색 열쇠로 이어진 조각"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>3D · 떨어진 열쇠 조각</sub></td>
+    <td align="center"><sub>횡스크롤 2D · 정렬된 열쇠</sub></td>
+  </tr>
+</table>
 
-Play를 끈 상태에서 Hierarchy의 **Map / Platforms** 아래 발판을 선택해 이동하거나 크기를 바꾼다. `Ctrl+D`로 복제해 발판을 추가할 수 있다. `ProjectableBox`와 `BoxCollider`가 붙은 박스가 2D 투영 지형 대상이다.
+### 탑뷰 2D · 레일 퍼즐
 
-**Spawn Point**, **Exit**, **Camera Focus**의 Transform을 옮기면 시작 위치, 출구, 카메라 기준점을 바꿀 수 있다. 현재 A/B의 기본 배치는 유지되어 있으며, 수정한 원본 맵은 씬에 저장한다.
+06 스테이지에서는 위에서 내려다보는 각도로 두 레일을 맞춥니다. 탑뷰 2D로 전환한 뒤 `WASD`로 움직여 꺾인 레일을 따라 스위치를 목표까지 밉니다.
 
-HUD는 `Assets/_Game/Prefabs/UI/ProjectionHUD.prefab`의 인스턴스로 배치한다. 모드·좌우/상하 각도·클리어 조건을 중앙 정렬하고, 왼쪽 아래에 간단한 조작표를 표시한다. `Landing Block`과 전환·복귀 안내는 표시하지 않는다. 진행도는 출구에 필요한 기믹의 완료 수를 `클리어 조건 (1/3)` 형태로 보여주며, 전부 완료하면 초록색이 된다. 출구 도착 후 상단 각도와 오른쪽 클리어 조건 사이에 초록색 `Enter를 눌러 다음스테이지로 이동` 안내를 표시한다. 안내 오브젝트는 평소 비활성화하며, 마지막 스테이지는 전체 완료 문구를 표시한다. 완료 개수는 계속 유지한다. 프리팹의 위치·크기·색·폰트·조작 문구를 편집하면 연결된 씬에 공통 적용된다. 새 씬에서는 HUD의 Prototype과 프로토타입의 Hud를 서로 연결한다.
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/rail-3d.png" width="100%" alt="스테이지 06의 서로 떨어진 레일과 스위치"></td>
+    <td width="50%" align="center"><img src="docs/images/rail-top-down.png" width="100%" alt="탑뷰 2D에서 이어진 꺾인 레일과 스위치를 미는 캐릭터"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>3D · 분리된 레일 구간</sub></td>
+    <td align="center"><sub>탑뷰 2D · 연결된 레일 위의 스위치</sub></td>
+  </tr>
+</table>
 
-사용자가 편집한 패널과 아이콘은 `ProjectionHUD / Safe Area` 아래에 유지한다. `CanvasScaler`는 1280×720 기준의 Scale With Screen Size·Expand를 사용하고, `ProjectionHudLayout`이 화면 안전 영역 안에 전체 구성을 맞춘다. 패널의 개별 위치·크기·문구를 재설정하지 않는다. `Controls`는 처음에 켜지며 숫자 `5` 또는 숫자패드 `5`로 조작키 패널 전체를 표시·숨김한다. `ProjectionPrototypeHud.ControlsRoot`가 대상 패널이고 `ControlsVisibleOnStart`가 시작 표시 여부다. 리스폰이나 차원 전환은 표시 상태를 바꾸지 않는다.
+### 전력 퍼즐
 
-배경색 편집 위치:
+07 스테이지에서는 전선이 연결될 각도를 찾으면 3D에서 전선이 초록색으로 표시됩니다. 2D로 전환하면 전력이 흐르기 시작하고, 충전된 구간은 파란색으로 표시됩니다.
 
-- 미니맵: `ProjectionHUD / Safe Area / Tactical Minimap`의 **Projection Minimap > Background Color**. 테두리는 Border Color다.
-- 조작키: `ProjectionHUD / Safe Area / Controls`의 **Image > Color**. 알파 값으로 배경 투명도를 바꾼다.
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/power-3d.png" width="100%" alt="3D에서 연결 가능한 전선이 초록색으로 표시된 화면"></td>
+    <td width="50%" align="center"><img src="docs/images/power-2d.png" width="100%" alt="2D로 전환한 뒤 파란색으로 충전 중인 전선"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>3D · 연결 가능한 각도</sub></td>
+    <td align="center"><sub>2D · 충전 중인 회로</sub></td>
+  </tr>
+</table>
 
-UI 텍스트는 모두 TextMeshProUGUI를 사용하며, 코드 연결은 TMP_Text다. 한글 Font Asset은 `Assets/_Game/Fonts/NotoSansCJKkr-Regular SDF.asset`이고, `NotoSansCJKkr-Regular.otf`는 동적 글리프 생성에 사용하는 원본이다. SDF 에셋은 TMP 기본 폰트와 전역 fallback에도 등록되어 있다. Dynamic·Multi Atlas 설정으로 편집 중 처음 입력하는 한글도 추가한다. HUD의 KoreanFont에도 같은 TMP 에셋을 연결하므로 편집 화면·실행·빌드에서 같은 폰트를 사용한다. 폰트 출처는 [Noto Sans CJK](https://github.com/notofonts/noto-cjk)이며 동봉된 `OFL.txt`를 유지한다. 폰트 설정 복구는 **Puzzle Game > UI > Configure Korean Fonts**를 사용하며 HUD 프리팹의 배치를 재생성하지 않는다.
+### 캠페인 전경
 
-미니맵은 실제 월드 XZ 배치를 북쪽 고정으로 보여준다. 현재 발판, 플레이어 위치와 카메라 방향, 열쇠, 레일 스위치·목표, 전원·전구·충전 상태, 출구를 표시한다. 2D에서는 현재 복귀 후보 위치가 파란 플레이어 표식으로 나타난다. 미니맵 위에서도 좌클 드래그·휠 줌이 동작한다. 캠페인 발판은 군집마다 서로 다른 방향과 높이로 넓게 떨어져 있으며, 기믹 작동을 위해 특정 발판에 착지할 필요가 없다.
+01 스테이지에서는 열쇠 하나를 맞춰 출구를 엽니다. 15 스테이지에서는 여러 높이에 흩어진 열쇠, 레일, 전력 장치를 서로 다른 시점에서 해결합니다.
 
-## 조작
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/stage-01.png" width="100%" alt="01 스테이지의 열쇠 조각과 출구 발판 전경"></td>
+    <td width="50%" align="center"><img src="docs/images/stage-15.png" width="100%" alt="15 스테이지의 여러 발판과 전력 장치 전경"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>01 · 처음 맞는 조각</sub></td>
+    <td align="center"><sub>15 · 마지막 전력망</sub></td>
+  </tr>
+</table>
 
-| 키 | 기능 |
-|---|---|
-| `R` | 2D ↔ 3D 전환 |
-| `WASD` | 3D 이동 / 탑뷰 2D 평면 이동 |
-| `A` / `D` | 횡스크롤 2D 좌우 이동 |
-| 마우스 휠 | 3D·2D 공통 확대·축소 |
-| 마우스 좌클릭 + 드래그 | 3D·2D 공통 카메라 화면 이동 |
-| 마우스 우클릭 + 좌우·상하 드래그 | 플레이어의 화면 위치를 유지하며 3D 회전: 좌우 360도, 상하 -90~+90도 |
-| `Space` | 3D / 횡스크롤 2D 점프 |
-| `Backspace` | 시작 상태로 초기화 |
-| `Esc` | 일시정지. 메뉴에서도 스테이지를 다시 시작할 수 있다 |
-| `5` / 숫자패드 `5` | 조작키 안내 표시·숨김 (기본 표시) |
+---
 
-시작과 Backspace 전체 초기화의 카메라 각도는 좌우 25°·상하 25°다. 낙하 리스폰은 현재 각도·화면 이동 구도·확대·축소 상태를 유지한다.
+## 🎮 게임 플레이 & 특징
 
-## 첫 플레이
+- **시점 기반 지형 투영** — 3D 카메라의 방향과 기울기에 따라 2D 지형이 달라집니다. 떨어진 발판을 화면에서 이어 건넌 뒤 실제 3D 발판 위로 돌아옵니다.
+- **두 가지 2D 이동 방식** — 낮은 각도에서는 횡스크롤로 좌우 이동과 점프를 하고, 가파른 각도에서는 탑뷰로 전환해 평면을 이동합니다.
+- **열쇠·레일·전력 퍼즐** — 열쇠 조각을 맞춰 획득하고, 맞물린 레일을 따라 스위치를 밀고, 전선을 이어 전구나 다음 전원에 전력을 보냅니다.
+- **튜토리얼과 15개 스테이지** — 튜토리얼에서 이동과 시점 전환, 세 가지 장치를 연습합니다. 메인 메뉴에서 스테이지를 선택하거나 마지막으로 입장한 스테이지의 시작 지점에서 이어할 수 있습니다.
+- **미니맵과 진행도** — 미니맵에서 실제 3D 배치와 장치 위치를 확인하고, HUD에서 현재 모드와 각도, 남은 클리어 조건을 확인합니다.
 
-시작 발판 A와 도착 발판 B는 정면에서 떨어져 있다. 횡스크롤 2D에서는 **마우스 드래그로 시점 조정 → R → D → R** 순서로 차원 이동을 확인할 수 있다. 3D 상태의 HUD가 R을 누르면 들어갈 2D 모드를 미리 표시한다.
+### 기본 조작
 
-1. 좌클릭 드래그로 화면을 옮기고 마우스 휠로 확대·축소한다. 우클릭한 채 좌우·상하로 드래그해 두 발판이 연결되어 보이는 방향을 찾는다. 카메라는 플레이어를 따라가며, 회전 중에도 WASD 이동과 점프를 사용할 수 있다. 상하 회전은 화면이 뒤집히지 않도록 -90~+90도로 제한한다.
-2. `R`을 눌러 현재 방향과 기울기가 반영된 2D 지형으로 전환한다. 화면에 투영된 두 발판을 길로 이용한다.
-3. `D`로 A의 투영 끝을 지나 B 안쪽까지 이동한다. HUD의 지지 발판이 **B**, 상태가 **3D 복귀 가능**인지 확인하고 멈춘다.
-4. `R`을 누르면 실제 3D 공간의 발판 B 위로 돌아온다.
-5. `WASD`로 B 위의 연두색 출구 기둥에 도착한다.
+| 조작 | 기능 |
+| --- | --- |
+| `R` | 3D ↔ 2D 전환 |
+| `WASD` | 3D 또는 탑뷰 2D에서 이동 |
+| `A` / `D` | 횡스크롤 2D에서 좌우 이동 |
+| `Space` | 3D 또는 횡스크롤 2D에서 점프 |
+| 마우스 우클릭 + 드래그 | 3D 카메라 회전 |
+| 마우스 좌클릭 + 드래그 / 휠 | 카메라 화면 이동 / 확대·축소 |
+| `Backspace` | 현재 스테이지 초기화 |
+| `Esc` | 일시정지 |
+| `5` / 숫자패드 `5` | 조작 안내 표시·숨김 |
+| `Enter` | 출구 도착 후 다음 스테이지로 이동 |
 
-기울어진 시점에서 2D로 들어갈 때는 캐릭터를 투영된 발판 윗면에 맞춘다. 3D 복귀 때는 원본 발판의 안전한 실제 윗면 위치로 보정한다.
+---
 
-기울기(pitch)의 절댓값이 40도 이상이면 `R`로 **탑뷰 2D**에 들어간다. 이때는 `WASD`로 원본 박스 윗면의 투영 영역 안에서 두 축으로 이동하며 중력과 점프를 사용하지 않는다. `R`을 다시 누르면 현재 서 있는 실제 윗면으로 3D 복귀한다. 기울기 절댓값이 40도 미만이면 기존 횡스크롤 이동과 점프를 사용한다.
+## 🛠 Tech Stack
 
-튜토리얼과 6스테이지에는 55도 탑뷰에서 `WASD`로 미는 꺾인 레일이 있다. 3스테이지의 두 번째 열쇠는 탑뷰 평면 이동으로 획득하며, 12스테이지의 깊은 전력 분기와 15스테이지의 최종 회로도 탑뷰로 연결한다.
+- **엔진·언어** — Unity 6000.0.68f1, C#
+- **렌더링** — Universal Render Pipeline 17.0.4
+- **입력·UI** — Unity Input System 1.18.0, uGUI, TextMeshPro
 
-수평·상하 시점 회전, 박스의 2D 투영 지형·충돌 생성, 두 모드의 이동·점프, 지지 발판 추적과 안전한 3D 복귀를 지원한다. 공중이나 몸이 들어갈 공간이 없는 위치에서는 전환을 거절하며 실패 이유가 담긴 알림을 띄운다. 기믹 스테이지에서는 정렬된 열쇠 획득, 몸으로 미는 레일 스위치, 시점을 바꿔 이어가는 전력 릴레이를 사용한다. 3D에서 다음 레일 접합이나 전원이 공급된 전선이 연결 가능해지면 해당 선 전체가 초록색으로 표시된다. 2D로 전환하면 원래 레일과 전선 색으로 돌아오고, 전선이 충전되는 길이는 파란색으로 표시된다. 충전 조건은 실제 전원 상태와 2D 접합이다. 시점을 바꿔 접합이 떨어지면 실제 두 전선 반쪽과 저장된 충전 길이를 표시한다.
+## 📂 주요 소스 코드 및 프로젝트 구조
 
-3D와 2D는 같은 정사영 크기와 화면 중심을 사용해 전환 전후의 구도를 유지한다. 좌클릭 드래그로 두 모드의 화면을 이동할 수 있다. 마우스 휠을 위로 굴리면 확대하고 아래로 굴리면 축소하며, 두 카메라의 크기가 함께 부드럽게 바뀐다. 카메라는 걷기·점프·2D 이동이 반영된 같은 프레임의 LateUpdate에서 플레이어를 따라간다. 구도는 플레이어를 기준으로 화면 좌표계에 저장하므로 회전해도 플레이어가 화면 반대편으로 휘돌지 않는다. 2D에서는 복귀 미리보기 대신 실제 2D 캐릭터를 추적하고, 3D 복귀 시에는 되찾은 깊이를 반영한다. `ProjectionPrototype` Inspector의 `Initial Zoom Size`는 스테이지 시작 크기, `Min/Max Zoom Size`는 확대·축소 범위다. 카메라 거리는 지형이 잘리지 않도록 확보한다.
+```text
+My project/Assets/_Game/
+├─ Scenes/                      # 메인 메뉴와 캠페인 씬
+├─ Prefabs/UI/                  # 공용 HUD 프리팹
+├─ Scripts/
+│  ├─ ProjectionPrototype.cs   # 차원 전환과 카메라 제어
+│  ├─ ProjectionMath.cs        # 2D 투영과 3D 복귀에 쓰이는 좌표 계산
+│  ├─ ProjectionMinimap.cs     # 실제 3D 배치를 보여주는 미니맵
+│  ├─ Puzzles/                 # 열쇠, 레일, 전력 회로 로직
+│  └─ Campaign/                # 튜토리얼과 스테이지 진행 처리
+└─ Tests/                       # EditMode 및 PlayMode 테스트
+```
+
+## 🚀 실행 방법
+
+1. 저장소를 클론합니다.
+
+   ```bash
+   git clone https://github.com/wkdrudgnsdla/PuzzleGame.git
+   ```
+
+2. Unity Hub에서 `PuzzleGame/My project` 폴더를 Unity `6000.0.68f1`로 엽니다.
+3. `Assets/_Game/Scenes/MainMenu.unity`를 열고 **Play**를 누릅니다.
+4. 메인 메뉴에서 **게임 시작**을 누르면 첫 플레이에서는 튜토리얼이 시작됩니다. **스테이지 선택**에서는 튜토리얼과 01~15 스테이지를 직접 고를 수 있습니다.
+
+[캠페인 스테이지 안내](docs/CampaignStages.md) · [프로젝트 가이드](docs/ProjectGuide.md)
