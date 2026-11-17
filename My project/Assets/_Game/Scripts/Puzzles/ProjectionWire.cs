@@ -24,6 +24,8 @@ namespace PuzzleGame
         private static readonly Color ConnectedColor = new Color(0.34f, 0.43f, 0.5f);
         private static readonly Color EnergyColor = new Color(0.03f, 0.72f, 1f);
         private static readonly Color CutPlugColor = new Color(0.5f, 0.36f, 0.2f);
+        private const float ProjectedCableDepth = -0.36f;
+        private const float ProjectedEnergyDepth = -0.4f;
         private readonly List<Vector3> projectedPoints = new List<Vector3>();
         private readonly List<Vector3> worldPoints = new List<Vector3>();
         private readonly List<Vector3> prefix = new List<Vector3>();
@@ -33,8 +35,8 @@ namespace PuzzleGame
         private readonly List<Transform> worldSourceEnergy = new List<Transform>();
         private readonly List<Transform> worldTargetEnergy = new List<Transform>();
         private Transform firstCutPlug, secondCutPlug;
-        private LineRenderer projectedCable, projectedSource, projectedTarget, projectedEnergy;
-        private LineRenderer projectedSourceEnergy, projectedTargetEnergy;
+        private ProjectedStroke projectedCable, projectedSource, projectedTarget, projectedEnergy;
+        private ProjectedStroke projectedSourceEnergy, projectedTargetEnergy;
         private Material cableMaterial, energyMaterial, worldCableMaterial, connectorMaterial;
         private bool visualsReady;
         private bool sourceEndExposed, targetEndExposed;
@@ -77,12 +79,13 @@ namespace PuzzleGame
             projectedRoot = NewRoot("Wire 2D", ProjectionPrototype.World2DLayer);
             firstCutPlug = NewTubePrimitive("Source cut connector", PrimitiveType.Sphere, connectorMaterial);
             secondCutPlug = NewTubePrimitive("Target cut connector", PrimitiveType.Sphere, connectorMaterial);
-            projectedCable = NewLine("Connected path", projectedRoot, cableMaterial, Width);
-            projectedSource = NewLine("Source half", projectedRoot, cableMaterial, Width);
-            projectedTarget = NewLine("Target half", projectedRoot, cableMaterial, Width);
-            projectedEnergy = NewLine("Energy front", projectedRoot, energyMaterial, Width * 0.7f);
-            projectedSourceEnergy = NewLine("Stored source energy", projectedRoot, energyMaterial, Width * 0.7f);
-            projectedTargetEnergy = NewLine("Stored target energy", projectedRoot, energyMaterial, Width * 0.7f);
+            projectedCable = new ProjectedStroke("Connected path", projectedRoot, cableMaterial, Width);
+            projectedSource = new ProjectedStroke("Source half", projectedRoot, cableMaterial, Width);
+            projectedTarget = new ProjectedStroke("Target half", projectedRoot, cableMaterial, Width);
+            float energyWidth = Width * 0.7f;
+            projectedEnergy = new ProjectedStroke("Energy front", projectedRoot, energyMaterial, energyWidth);
+            projectedSourceEnergy = new ProjectedStroke("Stored source energy", projectedRoot, energyMaterial, energyWidth);
+            projectedTargetEnergy = new ProjectedStroke("Stored target energy", projectedRoot, energyMaterial, energyWidth);
         }
 
         public void ResetWire()
@@ -168,55 +171,60 @@ namespace PuzzleGame
             secondCutPlug.position = TargetPath[0].position;
             firstCutPlug.localScale = secondCutPlug.localScale = Vector3.one * Width * 1.55f;
 
-            BuildCombined(frame, true, projectedPoints);
-            SetLine(projectedCable, projectedPoints);
-            projectedCable.enabled = IsConnected;
-            projectedSource.enabled = !IsConnected;
-            projectedTarget.enabled = !IsConnected;
-            SetPath(projectedSource, SourcePath, true, frame, -0.36f);
-            SetPath(projectedTarget, TargetPath, true, frame, -0.36f);
-            BuildPrefix(projectedPoints, FillProgress, prefix);
-            for (int i = 0; i < prefix.Count; i++) prefix[i] += Vector3.back * 0.04f;
-            SetLine(projectedEnergy, prefix);
-            projectedEnergy.enabled = IsConnected && prefix.Count >= 2 && Source.IsPowered;
-
             // Keep the ready preview uniformly green. The projected charge front still uses its stored progress.
             float firstLength = PathLength(SourcePath);
             float secondLength = PathLength(TargetPath);
             float filledLength = (firstLength + secondLength) * FillProgress;
+            float firstFill = firstLength > 0f ? Mathf.Clamp01(filledLength / firstLength) : 0f;
+            float secondFill = secondLength > 0f ? Mathf.Clamp01((filledLength - firstLength) / secondLength) : 0f;
             BuildPath(SourcePath, false, frame, 0f, worldPoints);
-            BuildPrefix(worldPoints, firstLength > 0f ? Mathf.Clamp01(filledLength / firstLength) : 0f, prefix);
+            BuildPrefix(worldPoints, firstFill, prefix);
             if (showReady || !Source.IsPowered) prefix.Clear();
             SetTubes(worldSourceEnergy, prefix, Width * 0.65f, energyMaterial,
                 Vector3.up * Width * 0.7f, "Charged source conductor");
-            BuildPath(SourcePath, true, frame, -0.4f, worldPoints);
-            BuildPrefix(worldPoints, firstLength > 0f ? Mathf.Clamp01(filledLength / firstLength) : 0f, prefix);
-            SetLine(projectedSourceEnergy, prefix);
-            projectedSourceEnergy.enabled = !IsConnected && Source.IsPowered && prefix.Count >= 2;
             BuildPath(TargetPath, false, frame, 0f, worldPoints);
-            BuildPrefix(worldPoints, secondLength > 0f
-                ? Mathf.Clamp01((filledLength - firstLength) / secondLength) : 0f, prefix);
+            BuildPrefix(worldPoints, secondFill, prefix);
             if (showReady || !Source.IsPowered) prefix.Clear();
             SetTubes(worldTargetEnergy, prefix, Width * 0.65f, energyMaterial,
                 Vector3.up * Width * 0.7f, "Charged target conductor");
-            BuildPath(TargetPath, true, frame, -0.4f, worldPoints);
-            BuildPrefix(worldPoints, secondLength > 0f
-                ? Mathf.Clamp01((filledLength - firstLength) / secondLength) : 0f, prefix);
-            SetLine(projectedTargetEnergy, prefix);
-            projectedTargetEnergy.enabled = !IsConnected && Source.IsPowered && prefix.Count >= 2;
+
+            if (is2D && showProjection) RefreshProjectedPaths(frame, firstFill, secondFill);
         }
 
-        private void BuildCombined(ProjectionFrame frame, bool projected, List<Vector3> result)
+        private void RefreshProjectedPaths(ProjectionFrame frame, float firstFill, float secondFill)
         {
-            result.Clear();
-            AppendPath(SourcePath, projected, frame, -0.36f, result);
-            AppendPath(TargetPath, projected, frame, -0.36f, result);
+            if (IsConnected)
+            {
+                projectedSource.Hide();
+                projectedTarget.Hide();
+                projectedSourceEnergy.Hide();
+                projectedTargetEnergy.Hide();
+                BuildPath(SourcePath, true, frame, ProjectedCableDepth, projectedPoints);
+                AppendPath(TargetPath, true, frame, ProjectedCableDepth, projectedPoints);
+                projectedCable.SetPath(projectedPoints);
+                SetProjectedEnergy(projectedEnergy, FillProgress);
+                return;
+            }
+
+            projectedCable.Hide();
+            projectedEnergy.Hide();
+            SetProjectedHalf(frame, SourcePath, projectedSource, projectedSourceEnergy, firstFill);
+            SetProjectedHalf(frame, TargetPath, projectedTarget, projectedTargetEnergy, secondFill);
         }
 
-        private void SetPath(LineRenderer line, Transform[] path, bool projected, ProjectionFrame frame, float z)
+        private void SetProjectedHalf(ProjectionFrame frame, Transform[] path,
+            ProjectedStroke cable, ProjectedStroke energy, float fill)
         {
-            BuildPath(path, projected, frame, z, worldPoints);
-            SetLine(line, worldPoints);
+            BuildPath(path, true, frame, ProjectedCableDepth, projectedPoints);
+            cable.SetPath(projectedPoints);
+            SetProjectedEnergy(energy, fill);
+        }
+
+        private void SetProjectedEnergy(ProjectedStroke energy, float fill)
+        {
+            BuildPrefix(projectedPoints, Source.IsPowered ? fill : 0f, prefix);
+            for (int i = 0; i < prefix.Count; i++) prefix[i] = new Vector3(prefix[i].x, prefix[i].y, ProjectedEnergyDepth);
+            energy.SetPath(prefix);
         }
 
         private static void BuildPath(Transform[] path, bool projected, ProjectionFrame frame,
@@ -285,25 +293,59 @@ namespace PuzzleGame
             return root.transform;
         }
 
-        private static LineRenderer NewLine(string lineName, Transform parent, Material material, float width)
+        private sealed class ProjectedStroke
         {
-            var lineObject = new GameObject(lineName, typeof(LineRenderer));
-            lineObject.layer = parent.gameObject.layer;
-            lineObject.transform.SetParent(parent, false);
-            var line = lineObject.GetComponent<LineRenderer>();
-            line.useWorldSpace = true;
-            line.widthMultiplier = width;
-            line.numCapVertices = 4;
-            line.numCornerVertices = 4;
-            line.sharedMaterial = material;
-            line.positionCount = 0;
-            return line;
-        }
+            private readonly Transform root;
+            private readonly Material material;
+            private readonly float width;
+            private readonly List<LineRenderer> segments = new List<LineRenderer>();
 
-        private static void SetLine(LineRenderer line, List<Vector3> points)
-        {
-            line.positionCount = points.Count;
-            for (int i = 0; i < points.Count; i++) line.SetPosition(i, points[i]);
+            public ProjectedStroke(string name, Transform parent, Material material, float width)
+            {
+                root = new GameObject(name) { layer = parent.gameObject.layer }.transform;
+                root.SetParent(parent, false);
+                this.material = material;
+                this.width = width;
+            }
+
+            public void Hide() => root.gameObject.SetActive(false);
+
+            public void SetPath(List<Vector3> points)
+            {
+                // An accepted overlap can make the join briefly run backwards in XY.
+                // Draw each capped segment separately so that join cannot pinch either cable half.
+                int count = 0;
+                for (int i = 1; i < points.Count; i++)
+                {
+                    Vector3 start = points[i - 1];
+                    Vector3 end = points[i];
+                    if ((end - start).sqrMagnitude < 0.000001f) continue;
+                    if (count == segments.Count) segments.Add(CreateSegment());
+                    LineRenderer line = segments[count++];
+                    line.transform.rotation = Quaternion.identity;
+                    line.SetPosition(0, start);
+                    line.SetPosition(1, end);
+                    line.enabled = true;
+                }
+                for (int i = count; i < segments.Count; i++) segments[i].enabled = false;
+                root.gameObject.SetActive(count > 0);
+            }
+
+            private LineRenderer CreateSegment()
+            {
+                var child = new GameObject("Stroke segment", typeof(LineRenderer)) { layer = root.gameObject.layer };
+                child.transform.SetParent(root, false);
+                var line = child.GetComponent<LineRenderer>();
+                line.useWorldSpace = true;
+                line.alignment = LineAlignment.TransformZ;
+                line.startWidth = line.endWidth = width;
+                line.numCapVertices = 4;
+                line.sharedMaterial = material;
+                line.positionCount = 2;
+                line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                line.receiveShadows = false;
+                return line;
+            }
         }
 
         private void SetTubes(List<Transform> tubes, List<Vector3> path, float diameter,
