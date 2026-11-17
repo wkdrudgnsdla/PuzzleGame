@@ -139,16 +139,10 @@ My project/Assets/_Game/
 └─ Tests/                       # EditMode 및 PlayMode 테스트
 ```
 
-## 🚀 실행 방법
+## 🚀 다운로드 및 실행 (Windows 64비트)
 
-1. 저장소를 클론합니다.
-
-   ```bash
-   git clone https://github.com/wkdrudgnsdla/PuzzleGame.git
-   ```
-
-2. Unity Hub에서 `PuzzleGame/My project` 폴더를 Unity `6000.0.68f1`로 엽니다.
-3. `Assets/_Game/Scenes/MainMenu.unity`를 열고 **Play**를 누릅니다.
-4. 메인 메뉴에서 **게임 시작**을 누르면 첫 플레이에서는 튜토리얼이 시작됩니다. **스테이지 선택**에서는 튜토리얼과 01~15 스테이지를 직접 고를 수 있습니다.
+1. [Foldway-Windows.zip](https://github.com/wkdrudgnsdla/PuzzleGame/releases/latest/download/Foldway-Windows.zip)을 다운로드합니다.
+2. ZIP 파일을 우클릭하고 **모두 압축 풀기**를 선택합니다.
+3. 압축을 푼 폴더에서 `Foldway.exe`를 실행하고 **게임 시작**을 선택합니다.
 
 [캠페인 스테이지 안내](docs/CampaignStages.md) · [프로젝트 가이드](docs/ProjectGuide.md)
