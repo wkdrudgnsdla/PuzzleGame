@@ -1,0 +1,13 @@
+{
+  "name": "PuzzleGame.Editor",
+  "rootNamespace": "PuzzleGame.Editor",
+  "references": [
+    "PuzzleGame.Runtime",
+    "UnityEngine.UI",
+    "Unity.TextMeshPro"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

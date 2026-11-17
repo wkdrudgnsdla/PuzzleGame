@@ -1,0 +1,936 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+
+namespace PuzzleGame
+{
+    /// <summary>Playable, self-contained proof of the shared 3D / projected 2D world.</summary>
+    public sealed class ProjectionPrototype : MonoBehaviour
+    {
+        public const int World3DLayer = 8;
+        public const int World2DLayer = 9;
+        public const int Player3DLayer = 10;
+        public const int Player2DLayer = 11;
+        private const double DimensionSwitchCooldownSeconds = 0.7;
+
+        public Material SurfaceTemplate;
+        public Material FlatTemplate;
+
+        [Header("Player prefabs")]
+        public GameObject Player3DPrefab;
+        public GameObject Player2DPrefab;
+
+        [Header("Scene map")]
+        public Transform MapRoot;
+        public Transform SpawnPoint;
+        public Transform ExitPoint;
+        public Transform CameraFocusPoint;
+        public ProjectionPrototypeHud Hud;
+        public StageRoute Route;
+        public ProjectionPuzzleStage PuzzleStage;
+
+        [Header("Mouse orbit")]
+        [SerializeField] private float initialYawDegrees = 25f;
+        [SerializeField, Range(-90f, 90f)] private float initialPitchDegrees = 25f;
+        [SerializeField, Min(0.01f)] private float dragDegreesPerPixel = 0.25f;
+        [SerializeField, Min(1f)] private float dragSmoothing = 20f;
+        [SerializeField, Range(65f, 90f)] private float verticalOrbitLimitDegrees = 90f;
+        [SerializeField, Range(20f, 80f)] private float topDownPitchThreshold = 40f;
+
+        [Header("Camera zoom and pan")]
+        [SerializeField, Min(0.1f)] private float minZoomSize = 1.5f;
+        [SerializeField, Min(0.1f)] private float maxZoomSize = 20f;
+        [SerializeField, Min(0.1f)] private float initialZoomSize = 4.4f;
+        [SerializeField, Min(0.01f)] private float wheelZoomSpeed = 0.15f;
+        [SerializeField, Min(1f)] private float zoomSmoothing = 16f;
+        [SerializeField, Min(0.01f)] private float panSensitivity = 1f;
+        [SerializeField, Min(1f)] private float panSmoothing = 20f;
+
+        private readonly List<ProjectableBox> terrain = new List<ProjectableBox>();
+        private readonly List<Material> ownedMaterials = new List<Material>();
+        private readonly Collider[] overlapBuffer = new Collider[16];
+        private ProjectionFrame frame;
+        private ProjectionWorldBuilder projectionBuilder;
+        private PrototypePlayer3D player3D;
+        private PrototypePlayer2D player2D;
+        private Camera camera3D;
+        private Camera camera2D;
+        private Transform projectionRoot;
+        private Transform returnMarker;
+        private Transform goal2D;
+        private Material[] projectedMaterials;
+        private PhysicsMaterial2D frictionless;
+        private ProjectableBox support;
+        private Vector3 lastAnchor;
+        private Vector3? returnPreview;
+        private int returnPreviewFrame = -1;
+        private Vector2? moveInputOverride;
+        private bool jumpInputOverride;
+        private bool initialized;
+        private double dimensionSwitchAvailableAt;
+        private float messageUntil;
+        private string message;
+        private bool draggingView;
+        private bool projectionDirty;
+        private Vector2 lastDragPosition;
+        private float currentViewYaw;
+        private float targetViewYaw;
+        private float currentViewPitch;
+        private float targetViewPitch;
+        private bool panningCamera;
+        private Vector2 lastPanPosition;
+        private Vector3 currentPanOffset;
+        private Vector3 targetPanOffset;
+        private float currentZoomSize;
+        private float targetZoomSize;
+        private Vector3 cameraPlayerAnchor;
+        private Vector3 cameraFramingOffset;
+        private float camera2DFollowDepth;
+        private MaterialPropertyBlock puzzleExitColors;
+        private bool? puzzleExitOpen;
+        private float projectedFallLimit = -5f;
+        private float worldFallLimit = -5f;
+
+        private Vector3 Spawn => SpawnPoint != null ? SpawnPoint.position : Vector3.zero;
+        private Vector3 Goal => ExitPoint != null ? ExitPoint.position : new Vector3(8f, 0f, 4f);
+        private Vector3 CameraBaseFocus => CameraFocusPoint != null ? CameraFocusPoint.position
+            : new Vector3(4f, 1.1f, 2f);
+        // Framing is stored in view space so rotating never swings the player across the screen.
+        private Vector3 CameraFocus => cameraPlayerAnchor
+            + frame.Right * (cameraFramingOffset.x + currentPanOffset.x)
+            + frame.Up * (cameraFramingOffset.y + currentPanOffset.y)
+            + frame.Forward * (cameraFramingOffset.z + currentPanOffset.z);
+
+        public bool Is2D { get; private set; }
+        public float DimensionSwitchCooldownRemaining =>
+            Mathf.Max(0f, (float)(dimensionSwitchAvailableAt - Time.unscaledTimeAsDouble));
+        public float YawDegrees => frame.Yaw;
+        public float PitchDegrees => frame.Pitch;
+        public float ZoomSize => currentZoomSize;
+        public float TopDownPitchThresholdDegrees => topDownPitchThreshold;
+        public bool IsTopDownView => Mathf.Abs(PitchDegrees) >= topDownPitchThreshold;
+        public bool IsTopDown2D => Is2D && IsTopDownView;
+        public IReadOnlyList<ProjectableBox> Terrain => terrain;
+        public bool HasWon { get; private set; }
+        public bool IsGrounded => initialized && (Is2D ? IsTopDown2D
+            ? FindTopDownSupport(player2D.Foot, out _) != null
+            : player2D.IsGrounded : player3D.IsGrounded);
+        public int CurrentSupportId => support != null ? support.Id : -1;
+        public Vector3 PlayerWorldFoot => !initialized ? Spawn :
+            !Is2D ? player3D.Foot : ReturnPreviewFoot ?? lastAnchor;
+        public Vector2 PlayerProjectedFoot => !initialized ? Vector2.zero :
+            Is2D ? player2D.Foot : frame.Project(player3D.Foot);
+        public Vector3? ReturnPreviewFoot => Is2D && returnPreviewFrame == Time.frameCount
+            ? returnPreview
+            : TryGetReturnFoot(out Vector3 foot) ? foot : (Vector3?)null;
+        public bool CanReturnTo3D => Is2D && TryGetReturnFoot(out _);
+        public string StatusMessage
+        {
+            get
+            {
+                if (!initialized) return "월드를 준비하는 중입니다.";
+                if (Time.unscaledTime < messageUntil) return message;
+                if (HasWon) return $"스테이지 클리어! {GameInput.KeyName("Restart")} 키로 다시 시작";
+                string dimension = GameInput.KeyName("SwitchDimension");
+                if (IsTopDown2D) return CanReturnTo3D
+                    ? $"탑뷰 2D · 이동 키로 이동하고 {dimension} 키로 현재 위치에서 3D로 돌아가세요."
+                    : "탑뷰 2D · 복귀 공간을 확보하려면 바닥 안쪽으로 조금 이동하세요.";
+                if (!IsGrounded) return "공중에서는 전환할 수 없습니다. 발판에 착지하세요.";
+                if (Is2D) return CanReturnTo3D ? $"복귀 가능 · {dimension} 키로 현재 발판의 3D 위치로 돌아가세요."
+                    : "복귀 공간이 부족합니다. 발판 안쪽으로 조금 더 이동하세요.";
+                if (IsTopDownView) return $"탑뷰 시점 · {dimension} 키로 2D 평면 이동에 들어가세요.";
+                return $"{GameInput.KeyName("Pan")} 드래그로 화면 이동 · 휠 줌 · " +
+                    $"{GameInput.KeyName("Orbit")} 드래그로 회전 · {dimension} 키로 차원 전환";
+            }
+        }
+
+        private void Start()
+        {
+            if (!InitializeWorld()) { enabled = false; return; }
+            initialized = true;
+            GameInput.Gameplay.Enable();
+            if (Route != null) Route.Initialize(this);
+            if (PuzzleStage != null) PuzzleStage.Initialize(this);
+            ResetPrototype();
+            if (Hud != null) Hud.gameObject.AddComponent<GamePauseMenu>().Initialize(this, Hud);
+        }
+
+        private void OnEnable()
+        {
+            if (initialized) GameInput.Gameplay.Enable();
+        }
+
+        private void OnDisable()
+        {
+            if (initialized) GameInput.Gameplay.Disable();
+        }
+
+        internal void SuspendGameplay()
+        {
+            StopMouseOrbit();
+            jumpInputOverride = false;
+            player2D.ClearInput();
+            enabled = false;
+        }
+
+        private bool InitializeWorld()
+        {
+            if (Player3DPrefab == null || Player2DPrefab == null)
+            {
+                Debug.LogError("Assign the 3D and 2D player prefabs to ProjectionPrototype before playing.", this);
+                return false;
+            }
+            if (MapRoot == null)
+            {
+                Debug.LogError("Assign the scene's Map object to ProjectionPrototype.MapRoot before playing.", this);
+                return false;
+            }
+            var usedIds = new HashSet<int>();
+            ProjectableBox[] placedBoxes = MapRoot.GetComponentsInChildren<ProjectableBox>(true);
+            var reservedIds = new HashSet<int>();
+            foreach (ProjectableBox box in placedBoxes) if (box.Id > 0) reservedIds.Add(box.Id);
+            int nextId = 1;
+            foreach (ProjectableBox box in placedBoxes)
+            {
+                int id = box.Id;
+                if (id <= 0 || usedIds.Contains(id))
+                {
+                    while (usedIds.Contains(nextId) || reservedIds.Contains(nextId)) nextId++;
+                    id = nextId++;
+                }
+                usedIds.Add(id);
+                box.Initialize(id, box.BodyColor);
+                if (box.isActiveAndEnabled && box.SourceCollider.enabled) terrain.Add(box);
+            }
+            if (terrain.Count == 0)
+            {
+                Debug.LogError("Add a BoxCollider and ProjectableBox to a platform under Map before playing.", this);
+                return false;
+            }
+            foreach (Transform placed in MapRoot.GetComponentsInChildren<Transform>(true))
+                placed.gameObject.layer = World3DLayer;
+            frame = new ProjectionFrame(Vector3.zero, 0f);
+
+            projectionRoot = NewChild("Generated 2D world", transform);
+            projectionBuilder = projectionRoot.gameObject.AddComponent<ProjectionWorldBuilder>();
+            projectedMaterials = new Material[terrain.Count];
+            for (int i = 0; i < terrain.Count; i++)
+                projectedMaterials[i] = CreateMaterial(terrain[i].BodyColor, true);
+
+            GameObject playerObject3D = Instantiate(Player3DPrefab, transform, false);
+            playerObject3D.name = "Player 3D";
+            player3D = playerObject3D.GetComponent<PrototypePlayer3D>();
+
+            GameObject playerObject2D = Instantiate(Player2DPrefab, transform, false);
+            playerObject2D.name = "Player 2D";
+            player2D = playerObject2D.GetComponent<PrototypePlayer2D>();
+            frictionless = playerObject2D.GetComponent<CapsuleCollider2D>().sharedMaterial;
+
+            camera3D = CreateCamera("3D camera", (1 << World3DLayer) | (1 << Player3DLayer));
+            camera3D.gameObject.tag = "MainCamera";
+            camera2D = CreateCamera("2D projection camera", (1 << World2DLayer) | (1 << Player2DLayer));
+
+            Material goalMaterial = CreateMaterial(new Color(0.49f, 0.96f, 0.63f), true);
+            GameObject marker = CreatePrimitive("Safe 3D return preview", PrimitiveType.Cube, transform,
+                Vector3.zero, new Vector3(0.65f, 0.035f, 0.65f), goalMaterial, World3DLayer);
+            Destroy(marker.GetComponent<Collider>());
+            returnMarker = marker.transform;
+            returnMarker.gameObject.SetActive(false);
+
+            goal2D = CreatePrimitive("Projected exit marker", PrimitiveType.Cube, projectionRoot,
+                Vector3.zero, new Vector3(0.22f, 1.15f, 0.08f), goalMaterial, World2DLayer).transform;
+            Destroy(goal2D.GetComponent<Collider>());
+            if (Hud != null) Hud.Initialize(this);
+            return true;
+        }
+
+        private Camera CreateCamera(string cameraName, int mask)
+        {
+            var cameraObject = new GameObject(cameraName, typeof(Camera));
+            cameraObject.transform.SetParent(transform, false);
+            Camera result = cameraObject.GetComponent<Camera>();
+            result.orthographic = true;
+            result.orthographicSize = ClampZoom(initialZoomSize);
+            result.nearClipPlane = 0.1f;
+            result.farClipPlane = 100f;
+            result.cullingMask = mask;
+            result.clearFlags = CameraClearFlags.SolidColor;
+            result.backgroundColor = new Color(0.035f, 0.055f, 0.085f);
+            result.allowHDR = false;
+            return result;
+        }
+
+        private Material CreateMaterial(Color color, bool flat)
+        {
+            Material template = flat ? FlatTemplate : SurfaceTemplate;
+            Shader shader = template != null ? template.shader : Shader.Find(flat ?
+                "Universal Render Pipeline/Unlit" : "Universal Render Pipeline/Lit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            var material = template != null ? new Material(template) : new Material(shader);
+            material.name = "Prototype " + (flat ? "flat" : "surface");
+            material.color = color;
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.12f);
+            if (flat && material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
+            ownedMaterials.Add(material);
+            return material;
+        }
+
+        private static Transform NewChild(string childName, Transform parent)
+        {
+            var child = new GameObject(childName);
+            child.transform.SetParent(parent, false);
+            return child.transform;
+        }
+
+        private static GameObject CreatePrimitive(string objectName, PrimitiveType type, Transform parent,
+            Vector3 position, Vector3 scale, Material material, int layer)
+        {
+            GameObject result = GameObject.CreatePrimitive(type);
+            result.name = objectName;
+            result.transform.SetParent(parent, false);
+            result.transform.localPosition = position;
+            result.transform.localScale = scale;
+            result.layer = layer;
+            result.GetComponent<Renderer>().sharedMaterial = material;
+            return result;
+        }
+
+        private void Update()
+        {
+            if (!initialized) return;
+            Vector2 movement = moveInputOverride ?? GameInput.Action("Move").ReadValue<Vector2>();
+            bool jump = jumpInputOverride || GameInput.Action("Jump").WasPressedThisFrame();
+            jumpInputOverride = false;
+            if (GameInput.Action("Restart").WasPressedThisFrame())
+            {
+                GameAudioEvents.Play(SoundCue.PlayerRestart);
+                ResetPrototype();
+                return;
+            }
+            UpdateCameraInput();
+            if (GameInput.Action("SwitchDimension").WasPressedThisFrame()) TryToggleMode();
+
+            if (PuzzleStage != null) PuzzleStage.Tick(frame, Is2D, movement, Time.deltaTime, HasWon);
+            UpdatePuzzleExitState();
+            if (Is2D) player2D.SetInput(movement, jump);
+            else player3D.Tick(movement, frame, jump, Time.deltaTime);
+            UpdateSupport();
+            if (!IsTopDown2D && !IsGrounded &&
+                (Is2D ? player2D.Foot.y < projectedFallLimit : player3D.Foot.y < worldFallLimit))
+            {
+                ResetPlayerAt(Route != null ? Route.RespawnPosition : Spawn);
+                GameAudioEvents.Play(SoundCue.PlayerRespawn);
+                Notify("낙하했습니다. 마지막 도달 지점으로 돌아왔습니다.");
+            }
+            if (!HasWon && !Is2D && support != null && IsGrounded &&
+                Vector3.Distance(player3D.Foot, Goal) < 0.8f &&
+                (Route == null || !Route.RequireCompletionForExit || Route.IsComplete) &&
+                (PuzzleStage == null || PuzzleStage.ObjectivesComplete))
+            {
+                HasWon = true;
+                var stage = GetComponent<CampaignStageFlow>();
+                GameAudioEvents.Play(stage != null && stage.IsFinalStage ? SoundCue.CampaignClear : SoundCue.StageClear);
+            }
+
+            // Share the result after movement and support resolution with the minimap render.
+            returnPreview = TryGetReturnFoot(out Vector3 foot) ? foot : (Vector3?)null;
+            returnPreviewFrame = Time.frameCount;
+            returnMarker.gameObject.SetActive(returnPreview.HasValue);
+            if (returnPreview.HasValue) returnMarker.position = returnPreview.Value + Vector3.up * 0.02f;
+        }
+
+        private void LateUpdate()
+        {
+            if (initialized) UpdateCameraFollow();
+        }
+
+        private Vector3 GetCameraPlayerAnchor()
+        {
+            if (!Is2D) return player3D.Foot + Vector3.up * (PrototypePlayer3D.Height * 0.5f);
+            Vector2 center = player2D.Foot + (IsTopDown2D ? Vector2.zero
+                : Vector2.up * (PrototypePlayer3D.Height * 0.5f));
+            // Keep depth continuous in 2D instead of following a changing return-preview platform.
+            return frame.Unproject(center, camera2DFollowDepth);
+        }
+
+        private void UpdateCameraFollow()
+        {
+            Vector3 anchor = GetCameraPlayerAnchor();
+            Vector3 movement = anchor - cameraPlayerAnchor;
+            if (movement.sqrMagnitude == 0f) return;
+            cameraPlayerAnchor = anchor;
+            UpdateCameraPose();
+        }
+
+        private void RebaseCameraFollow()
+        {
+            Vector3 anchor = GetCameraPlayerAnchor();
+            Vector3 movement = anchor - cameraPlayerAnchor;
+            // A mode change can restore a different world depth. Adopt that depth immediately
+            // while preserving the current projection of the whole scene.
+            Vector3 framingCorrection = new Vector3(Vector3.Dot(movement, frame.Right),
+                Vector3.Dot(movement, frame.Up), 0f);
+            currentPanOffset -= framingCorrection;
+            targetPanOffset -= framingCorrection;
+            cameraPlayerAnchor = anchor;
+            UpdateCameraPose();
+        }
+
+        private void UpdateCameraInput()
+        {
+            var pointerAction = GameInput.Action("Pointer");
+            if (pointerAction.controls.Count > 0)
+            {
+                Vector2 pointer = pointerAction.ReadValue<Vector2>();
+                var orbit = GameInput.Action("Orbit");
+                var pan = GameInput.Action("Pan");
+                bool overUi = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+                if (!overUi)
+                {
+                    float scroll = GameInput.Action("Zoom").ReadValue<float>();
+                    float steps = Mathf.Abs(scroll) > 10f ? scroll / 120f : scroll;
+                    if (!Mathf.Approximately(steps, 0f)) AdjustZoom(steps);
+                }
+                if (!Is2D && !overUi && orbit.WasPressedThisFrame())
+                {
+                    BeginViewDrag(pointer);
+                }
+                if (!overUi && pan.WasPressedThisFrame() && !orbit.IsPressed())
+                {
+                    StopMouseOrbit();
+                    panningCamera = true;
+                    lastPanPosition = pointer;
+                }
+                if (draggingView)
+                {
+                    // Pointer displacement already measures this frame's movement; do not multiply by deltaTime.
+                    Vector2 delta = pointer - lastDragPosition;
+                    DragView(delta);
+                    lastDragPosition = pointer;
+                    if (!orbit.IsPressed()) draggingView = false;
+                }
+                if (panningCamera)
+                {
+                    Vector2 delta = pointer - lastPanPosition;
+                    Camera activeCamera = Is2D ? camera2D : camera3D;
+                    float unitsPerPixel = 2f * currentZoomSize / Mathf.Max(1, activeCamera.pixelHeight);
+                    targetPanOffset -= new Vector3(delta.x, delta.y, 0f) * (unitsPerPixel * panSensitivity);
+                    lastPanPosition = pointer;
+                    if (!pan.IsPressed()) panningCamera = false;
+                }
+            }
+            else if (draggingView || panningCamera) StopMouseOrbit();
+
+            UpdateCameraMotion(Time.unscaledDeltaTime);
+        }
+
+        private void BeginViewDrag(Vector2 pointer)
+        {
+            StopMouseOrbit();
+            draggingView = true;
+            lastDragPosition = pointer;
+            // Follow the player while preserving their current screen framing, regardless of click position.
+        }
+
+        private void DragView(Vector2 delta)
+        {
+            // Match screen-space rotation across viewport resolutions.
+            float zoomScale = Mathf.Min(1f, currentZoomSize / ClampZoom(initialZoomSize));
+            float sensitivity = dragDegreesPerPixel * GamePreferences.CameraRotationSensitivity * zoomScale *
+                1080f / Mathf.Max(1, camera3D.pixelHeight);
+            targetViewYaw += delta.x * sensitivity;
+            targetViewPitch = Mathf.Clamp(targetViewPitch - delta.y * sensitivity,
+                -verticalOrbitLimitDegrees, verticalOrbitLimitDegrees);
+        }
+
+        private void AdjustZoom(float steps)
+        {
+            targetZoomSize = ClampZoom(targetZoomSize * Mathf.Exp(-steps * wheelZoomSpeed));
+        }
+
+        private void UpdateCameraMotion(float deltaTime)
+        {
+            float remaining = targetViewYaw - currentViewYaw;
+            float pitchRemaining = targetViewPitch - currentViewPitch;
+            if (!Is2D && (Mathf.Abs(remaining) > 0.001f || Mathf.Abs(pitchRemaining) > 0.001f))
+            {
+                // Keep the drag angle unwrapped so a stroke can pass through 0/360 without reversing.
+                float blend = 1f - Mathf.Exp(-dragSmoothing * deltaTime);
+                float next = Mathf.Abs(remaining) < 0.01f ? targetViewYaw
+                    : Mathf.Lerp(currentViewYaw, targetViewYaw, blend);
+                currentViewPitch = Mathf.Abs(pitchRemaining) < 0.01f ? targetViewPitch
+                    : Mathf.Lerp(currentViewPitch, targetViewPitch, blend);
+                ApplyView(next, false);
+            }
+            // Rebuild the derived 2D world when the view settles or R confirms it.
+            if (!draggingView && projectionDirty && Mathf.Abs(targetViewYaw - currentViewYaw) <= 0.001f
+                && Mathf.Abs(targetViewPitch - currentViewPitch) <= 0.001f)
+            {
+                currentViewYaw = targetViewYaw = YawDegrees;
+                RebuildProjection();
+            }
+
+            targetZoomSize = ClampZoom(targetZoomSize);
+            bool poseChanged = false;
+            float nextZoom = Mathf.Lerp(currentZoomSize, targetZoomSize, 1f - Mathf.Exp(-zoomSmoothing * deltaTime));
+            nextZoom = ClampZoom(Mathf.Abs(nextZoom - targetZoomSize) < .001f ? targetZoomSize : nextZoom);
+            if (nextZoom != currentZoomSize)
+            {
+                // Zoom around the player while keeping their authored screen position.
+                float ratio = currentZoomSize > .0001f ? nextZoom / currentZoomSize : 1f;
+                cameraFramingOffset.x *= ratio;
+                cameraFramingOffset.y *= ratio;
+                currentPanOffset.x *= ratio;
+                currentPanOffset.y *= ratio;
+                targetPanOffset.x *= ratio;
+                targetPanOffset.y *= ratio;
+                currentZoomSize = nextZoom;
+                poseChanged = true;
+            }
+            Vector3 nextPan = Vector3.Lerp(currentPanOffset, targetPanOffset, 1f - Mathf.Exp(-panSmoothing * deltaTime));
+            if ((nextPan - targetPanOffset).sqrMagnitude < .000001f) nextPan = targetPanOffset;
+            if (nextPan != currentPanOffset) { currentPanOffset = nextPan; poseChanged = true; }
+            if (poseChanged) UpdateCameraPose();
+        }
+
+        private void StopMouseOrbit()
+        {
+            draggingView = false;
+            panningCamera = false;
+            targetViewYaw = currentViewYaw;
+            targetViewPitch = currentViewPitch;
+            targetPanOffset = currentPanOffset;
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) StopMouseOrbit();
+        }
+
+        private void UpdateSupport()
+        {
+            returnPreviewFrame = -1;
+            if (IsTopDown2D)
+            {
+                support = FindTopDownSupport(player2D.Foot, out Vector3 worldFoot);
+                if (support != null) lastAnchor = worldFoot;
+                return;
+            }
+            if (!IsGrounded) { support = null; return; }
+            if (!Is2D)
+            {
+                support = null;
+                Vector3 foot = player3D.Foot;
+                foreach (ProjectableBox box in terrain)
+                {
+                    Bounds bounds = box.SourceCollider.bounds;
+                    if (Mathf.Abs(foot.y - bounds.max.y) < 0.12f &&
+                        foot.x >= bounds.min.x - 0.02f && foot.x <= bounds.max.x + 0.02f &&
+                        foot.z >= bounds.min.z - 0.02f && foot.z <= bounds.max.z + 0.02f)
+                    { support = box; lastAnchor = foot; break; }
+                }
+                return;
+            }
+            if (IsProjectedSupport(support)) return;
+            support = null;
+            float nearestDistance = float.PositiveInfinity;
+            foreach (ProjectableBox box in terrain)
+            {
+                if (!IsProjectedSupport(box)) continue;
+                Vector3 anchor;
+                float distance = ProjectionMath.TryGetProjectedSurface(box.SourceCollider, frame,
+                    player2D.Foot.x, out float surfaceHeight, out _) &&
+                    ProjectionMath.TryResolveBoxTop(box.SourceCollider, frame,
+                        new Vector2(player2D.Foot.x, surfaceHeight), 0f, lastAnchor, out anchor)
+                    ? (anchor - lastAnchor).sqrMagnitude : float.PositiveInfinity;
+                if (support == null || distance < nearestDistance - 0.001f ||
+                    (Mathf.Abs(distance - nearestDistance) < 0.001f && box.Id < support.Id))
+                { support = box; nearestDistance = distance; }
+            }
+        }
+
+        private bool IsProjectedSupport(ProjectableBox box)
+        {
+            return box != null && box.ProjectedCollider != null &&
+                player2D.IsSupportedBy(box.ProjectedCollider);
+        }
+
+        private bool TryGetReturnFoot(out Vector3 foot)
+        {
+            foot = default;
+            if (!initialized || !Is2D || !IsGrounded || support == null) return false;
+            if (IsTopDown2D)
+            {
+                if (!ProjectionMath.TryResolveBoxTopPoint(support.SourceCollider, frame, player2D.Foot,
+                    PrototypePlayer3D.Radius + 0.08f, out foot)) return false;
+            }
+            else if (!ProjectionMath.TryResolveBoxTopOnSurface(support.SourceCollider, frame,
+                player2D.Foot.x, PrototypePlayer3D.Radius + 0.08f, lastAnchor, out foot)) return false;
+            // Shrink slightly and lift off the floor: touching the support is allowed.
+            float radius = PrototypePlayer3D.Radius - 0.015f;
+            Vector3 bottom = foot + Vector3.up * (PrototypePlayer3D.Radius + 0.025f);
+            Vector3 top = foot + Vector3.up * (PrototypePlayer3D.Height - PrototypePlayer3D.Radius);
+            return Physics.OverlapCapsuleNonAlloc(bottom, top, radius, overlapBuffer,
+                1 << World3DLayer, QueryTriggerInteraction.Ignore) == 0;
+        }
+
+        public bool TryToggleMode()
+        {
+            if (!initialized) return false;
+            float remaining = DimensionSwitchCooldownRemaining;
+            if (remaining > 0f)
+            {
+                string direction = Is2D ? "2D → 3D" : "3D → 2D";
+                float displaySeconds = Mathf.Ceil(remaining * 10f) / 10f;
+                return RejectDimensionSwitch($"{direction} 전환 쿨타임이 {displaySeconds:0.0}초 남았습니다.");
+            }
+
+            UpdateCameraFollow();
+            UpdateSupport();
+            if (!IsGrounded || support == null)
+                return RejectDimensionSwitch($"발판에 착지한 뒤 {GameInput.KeyName("SwitchDimension")} 키를 누르세요.");
+            if (!Is2D)
+            {
+                // R commits the direction currently visible, including during a drag.
+                StopMouseOrbit();
+                // Re-read the source geometry on entry as well as on view changes.
+                RebuildProjection();
+                Vector2 projectedFoot = frame.Project(player3D.Foot);
+                if (IsTopDownView)
+                {
+                    Vector3 floorPoint = player3D.Foot;
+                    floorPoint.y = support.SourceCollider.bounds.max.y;
+                    projectedFoot = frame.Project(floorPoint);
+                }
+                else
+                {
+                    if (!ProjectionMath.TryGetProjectedSurface(support.SourceCollider, frame, projectedFoot.x,
+                        out float surfaceHeight, out Vector2 surfaceNormal))
+                        return RejectDimensionSwitch("이 각도에는 설 수 있는 투영 발판이 없습니다. 시점을 조금 바꿔주세요.");
+                    projectedFoot.y = surfaceHeight + PrototypePlayer3D.Radius *
+                        (1f / Mathf.Max(surfaceNormal.y, 0.1f) - 1f);
+                }
+                projectionRoot.gameObject.SetActive(true);
+                player2D.gameObject.SetActive(true);
+                player2D.SetSimulated(false);
+                player2D.SetTopDown(IsTopDownView, ConstrainTopDownMove);
+                player2D.Teleport(projectedFoot);
+                if (player2D.HasBlockingOverlap())
+                {
+                    player2D.gameObject.SetActive(false);
+                    projectionRoot.gameObject.SetActive(false);
+                    return RejectDimensionSwitch("투영된 지형이 몸과 겹칩니다. 위치나 시점을 바꿔주세요.");
+                }
+                lastAnchor = player3D.Foot;
+                player3D.gameObject.SetActive(false);
+                player2D.SetSimulated(true);
+                camera2DFollowDepth = frame.Depth(cameraPlayerAnchor);
+                Is2D = true;
+                Notify(IsTopDown2D ? "탑뷰 2D · 이동 키로 바닥 안에서 자유롭게 이동하세요."
+                    : "사이드뷰 2D · 화면에서 연결된 발판을 걸어서 건널 수 있습니다.");
+            }
+            else
+            {
+                if (!TryGetReturnFoot(out Vector3 foot))
+                    return RejectDimensionSwitch("이 위치에는 3D 복귀 공간이 없습니다. 발판 안쪽으로 이동하세요.");
+                player2D.SetSimulated(false);
+                player2D.gameObject.SetActive(false);
+                projectionRoot.gameObject.SetActive(false);
+                player3D.gameObject.SetActive(true);
+                player3D.Teleport(foot);
+                lastAnchor = foot;
+                Is2D = false;
+                Notify("3D 모드 · 이동한 발판의 실제 깊이로 돌아왔습니다.");
+            }
+            RebaseCameraFollow();
+            camera3D.enabled = !Is2D;
+            camera2D.enabled = Is2D;
+            dimensionSwitchAvailableAt = Time.unscaledTimeAsDouble + DimensionSwitchCooldownSeconds;
+            DimensionRipple.Play(Is2D ? camera2D : camera3D, Is2D);
+            GameAudioEvents.Play(Is2D ? SoundCue.DimensionTo2D : SoundCue.DimensionTo3D);
+            return true;
+        }
+
+        private bool RejectDimensionSwitch(string reason)
+        {
+            Notify(reason);
+            if (Hud != null) Hud.ShowDimensionFailure(reason);
+            GameAudioEvents.Play(SoundCue.DimensionBlocked);
+            return false;
+        }
+
+        public bool SetViewYaw(float yaw)
+        {
+            if (!initialized || float.IsNaN(yaw) || float.IsInfinity(yaw)) return false;
+            if (Is2D || !IsGrounded)
+            { Notify("시점은 3D에서 발판에 서 있을 때 바꿀 수 있습니다."); return false; }
+            StopMouseOrbit();
+            ApplyView(yaw);
+            targetViewYaw = currentViewYaw;
+            Notify($"시점 {Mathf.RoundToInt(YawDegrees)}° · {GameInput.KeyName("SwitchDimension")} 키로 2D 연결을 확인하세요.");
+            return true;
+        }
+
+        private void ApplyView(float yaw, bool rebuildProjection = true)
+        {
+            currentViewYaw = yaw;
+            frame = new ProjectionFrame(Vector3.zero, Mathf.Repeat(yaw, 360f), currentViewPitch);
+            UpdateCameraPose();
+            projectionDirty = true;
+            if (rebuildProjection) RebuildProjection();
+        }
+
+        private void UpdateCameraPose()
+        {
+            // Distance provides clipping clearance; both modes share the zoom size.
+            float nearestDepth = 0f;
+            float farthestDepth = 0f;
+            Vector3 absoluteForward = new Vector3(Mathf.Abs(frame.Forward.x),
+                Mathf.Abs(frame.Forward.y), Mathf.Abs(frame.Forward.z));
+            foreach (ProjectableBox box in terrain)
+            {
+                if (box == null) continue;
+                Bounds bounds = box.SourceCollider.bounds;
+                float depth = Vector3.Dot(bounds.center - CameraFocus, frame.Forward);
+                float extent = Vector3.Dot(bounds.extents, absoluteForward);
+                nearestDepth = Mathf.Min(nearestDepth, depth - extent);
+                farthestDepth = Mathf.Max(farthestDepth, depth + extent);
+            }
+            float distance = Mathf.Max(25f, 2f - nearestDepth);
+            camera3D.transform.SetPositionAndRotation(CameraFocus - frame.Forward * distance,
+                Quaternion.LookRotation(frame.Forward, frame.Up));
+            camera3D.farClipPlane = Mathf.Max(100f, distance + farthestDepth + 2f);
+            Vector2 focus = frame.Project(CameraFocus);
+            camera2D.transform.SetPositionAndRotation(new Vector3(focus.x, focus.y, -25f), Quaternion.identity);
+            camera3D.orthographicSize = camera2D.orthographicSize = currentZoomSize;
+        }
+
+        private float ClampZoom(float size)
+        {
+            float minimum = Mathf.Max(0.1f, minZoomSize);
+            return Mathf.Clamp(size, minimum, Mathf.Max(minimum, maxZoomSize));
+        }
+
+        private void OnValidate()
+        {
+            minZoomSize = Mathf.Max(0.1f, minZoomSize);
+            maxZoomSize = Mathf.Max(minZoomSize, maxZoomSize);
+            initialZoomSize = Mathf.Clamp(initialZoomSize, minZoomSize, maxZoomSize);
+            initialPitchDegrees = Mathf.Clamp(initialPitchDegrees, -verticalOrbitLimitDegrees, verticalOrbitLimitDegrees);
+        }
+
+        private void RebuildProjection()
+        {
+            returnPreviewFrame = -1;
+            projectionBuilder.Rebuild(terrain, frame, projectedMaterials, frictionless, World2DLayer, IsTopDownView);
+            // A valid low platform may project below world y=-5 when looking downward.
+            // Use the projected map bounds so descending circuits do not trigger a false fall.
+            float lowest = float.PositiveInfinity;
+            float lowestWorld = float.PositiveInfinity;
+            Vector3 vertical = new Vector3(Mathf.Abs(frame.Up.x), Mathf.Abs(frame.Up.y), Mathf.Abs(frame.Up.z));
+            foreach (ProjectableBox box in terrain)
+            {
+                Bounds bounds = box.SourceCollider.bounds;
+                lowest = Mathf.Min(lowest, frame.Project(bounds.center).y - Vector3.Dot(bounds.extents, vertical));
+                lowestWorld = Mathf.Min(lowestWorld, bounds.min.y);
+            }
+            projectedFallLimit = float.IsPositiveInfinity(lowest) ? -5f : lowest - 5f;
+            worldFallLimit = float.IsPositiveInfinity(lowestWorld) ? -5f : lowestWorld - 5f;
+            Vector2 exit = frame.Project(Goal);
+            goal2D.localPosition = new Vector3(exit.x, exit.y + (IsTopDownView ? 0f : 0.60f),
+                IsTopDownView ? -0.01f : -0.12f);
+            goal2D.localScale = IsTopDownView ? new Vector3(0.65f, 0.65f, 0.01f)
+                : new Vector3(0.22f, 1.15f, 0.08f);
+            projectionDirty = false;
+        }
+
+        private void UpdatePuzzleExitState(bool playSound = true)
+        {
+            if (PuzzleStage == null) return;
+            bool open = PuzzleStage.ObjectivesComplete &&
+                (Route == null || !Route.RequireCompletionForExit || Route.IsComplete);
+            if (puzzleExitOpen == open) return;
+            puzzleExitOpen = open;
+            if (open && playSound) GameAudioEvents.Play(SoundCue.ExitOpened);
+            if (puzzleExitColors == null) puzzleExitColors = new MaterialPropertyBlock();
+            Color color = open ? new Color(0.4f, 1f, 0.6f) : new Color(0.32f, 0.37f, 0.43f);
+            puzzleExitColors.SetColor("_BaseColor", color);
+            puzzleExitColors.SetColor("_Color", color);
+            if (ExitPoint != null)
+                foreach (Renderer renderer in ExitPoint.GetComponentsInChildren<Renderer>())
+                    renderer.SetPropertyBlock(puzzleExitColors);
+            if (goal2D != null) goal2D.GetComponent<Renderer>().SetPropertyBlock(puzzleExitColors);
+        }
+
+        /// <summary>Refresh both worlds after a puzzle enables or removes ordinary scene platforms.</summary>
+        public void RefreshTerrain()
+        {
+            if (!initialized || MapRoot == null) return;
+            // Retain materials for unchanged platforms; rewards can be toggled repeatedly without leaking materials.
+            var previous = new Dictionary<ProjectableBox, Material>();
+            for (int i = 0; i < terrain.Count; i++)
+                if (terrain[i] != null) previous[terrain[i]] = projectedMaterials[i];
+            terrain.Clear();
+            var ids = new HashSet<int>();
+            ProjectableBox[] boxes = MapRoot.GetComponentsInChildren<ProjectableBox>(true);
+            foreach (ProjectableBox box in boxes) if (box.Id > 0) ids.Add(box.Id);
+            var usedIds = new HashSet<int>();
+            int nextId = 1;
+            foreach (ProjectableBox box in boxes)
+            {
+                int id = box.Id;
+                if (id <= 0 || !usedIds.Add(id))
+                {
+                    while (ids.Contains(nextId) || usedIds.Contains(nextId)) nextId++;
+                    id = nextId++;
+                    usedIds.Add(id);
+                }
+                box.Initialize(id, box.BodyColor);
+                if (box.isActiveAndEnabled && box.SourceCollider.enabled) terrain.Add(box);
+            }
+            projectedMaterials = new Material[terrain.Count];
+            for (int i = 0; i < terrain.Count; i++)
+            {
+                ProjectableBox box = terrain[i];
+                box.gameObject.layer = World3DLayer;
+                if (previous.TryGetValue(box, out Material material))
+                {
+                    projectedMaterials[i] = material;
+                    previous.Remove(box);
+                }
+                else projectedMaterials[i] = CreateMaterial(box.BodyColor, true);
+            }
+            if (support != null && !terrain.Contains(support)) support = null;
+            Physics.SyncTransforms();
+            RebuildProjection();
+            foreach (Material removed in previous.Values)
+            {
+                ownedMaterials.Remove(removed);
+                if (removed != null) Destroy(removed);
+            }
+            UpdateSupport();
+            UpdateCameraPose();
+        }
+
+        private ProjectableBox FindTopDownSupport(Vector2 point, out Vector3 worldFoot)
+        {
+            worldFoot = default;
+            if (support != null && ProjectionMath.TryResolveBoxTopPoint(support.SourceCollider,
+                frame, point, 0f, out worldFoot)) return support;
+            ProjectableBox closest = null;
+            float distance = float.PositiveInfinity;
+            foreach (ProjectableBox box in terrain)
+            {
+                if (!ProjectionMath.TryResolveBoxTopPoint(box.SourceCollider, frame, point, 0f,
+                    out Vector3 candidate)) continue;
+                float candidateDistance = (candidate - lastAnchor).sqrMagnitude;
+                if (closest != null && candidateDistance >= distance) continue;
+                closest = box;
+                worldFoot = candidate;
+                distance = candidateDistance;
+            }
+            return closest;
+        }
+
+        private Vector2 ConstrainTopDownMove(Vector2 from, Vector2 desired)
+        {
+            Vector2 delta = desired - from;
+            int steps = Mathf.Max(1, Mathf.CeilToInt(delta.magnitude / 0.1f));
+            Vector2 step = delta / steps;
+            Vector2 position = from;
+            for (int i = 0; i < steps; i++)
+            {
+                Vector2 next = position + step;
+                if (FindTopDownSupport(next, out _) != null) { position = next; continue; }
+                // Slide along a floor boundary, while keeping every substep on the union of floor faces.
+                next = position + new Vector2(step.x, 0f);
+                if (FindTopDownSupport(next, out _) != null) position = next;
+                next = position + new Vector2(0f, step.y);
+                if (FindTopDownSupport(next, out _) != null) position = next;
+            }
+            return position;
+        }
+
+        public void ResetPrototype()
+        {
+            if (!initialized) return;
+            dimensionSwitchAvailableAt = 0d;
+            if (Route != null) Route.ResetProgress();
+            if (PuzzleStage != null) PuzzleStage.ResetProgress();
+            ResetPlayerAt(Spawn, resetCamera: true);
+            UpdatePuzzleExitState(playSound: false);
+            Notify($"시작 위치 · {GameInput.KeyName("SwitchDimension")} 키로 차원 전환 · {GameInput.KeyName("Jump")} 키로 점프");
+            GetComponent<CampaignStageFlow>()?.ResetTutorial();
+        }
+
+        private void ResetPlayerAt(Vector3 position, bool resetCamera = false)
+        {
+            DimensionRipple.Clear(camera3D);
+            DimensionRipple.Clear(camera2D);
+            Is2D = false;
+            HasWon = false;
+            moveInputOverride = null;
+            jumpInputOverride = false;
+            player2D.SetSimulated(false);
+            player2D.SetTopDown(false);
+            player2D.gameObject.SetActive(false);
+            projectionRoot.gameObject.SetActive(false);
+            player3D.gameObject.SetActive(true);
+            player3D.Teleport(position, resetFacing: resetCamera);
+            lastAnchor = position;
+            support = null;
+            UpdateSupport();
+            StopMouseOrbit();
+            Vector3 anchor = GetCameraPlayerAnchor();
+            if (resetCamera)
+            {
+                currentViewPitch = targetViewPitch = initialPitchDegrees;
+                cameraPlayerAnchor = anchor;
+                var initialFrame = new ProjectionFrame(Vector3.zero, initialYawDegrees, initialPitchDegrees);
+                Vector3 framing = CameraBaseFocus - anchor;
+                cameraFramingOffset = new Vector3(Vector3.Dot(framing, initialFrame.Right),
+                    Vector3.Dot(framing, initialFrame.Up), Vector3.Dot(framing, initialFrame.Forward));
+                currentPanOffset = targetPanOffset = Vector3.zero;
+                currentZoomSize = targetZoomSize = ClampZoom(initialZoomSize);
+                ApplyView(initialYawDegrees);
+            }
+            else
+            {
+                // Respawning moves the follow anchor, keeping the user's view and framing.
+                targetZoomSize = currentZoomSize;
+                cameraPlayerAnchor = anchor;
+                ApplyView(currentViewYaw);
+            }
+            targetViewYaw = currentViewYaw;
+            camera3D.enabled = true;
+            camera2D.enabled = false;
+            returnMarker.gameObject.SetActive(false);
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (Application.isPlaying) return;
+            if (SpawnPoint != null)
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawWireCube(SpawnPoint.position + Vector3.up * 0.9f, new Vector3(0.6f, 1.8f, 0.6f));
+            }
+            if (CameraFocusPoint != null)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawWireSphere(CameraFocusPoint.position, 0.2f);
+            }
+        }
+
+        public void SetMoveInputOverride(Vector2? move) { moveInputOverride = move; }
+        public void SetJumpInputOverride(bool jump) { jumpInputOverride = jump; }
+
+        private void Notify(string text) { message = text; messageUntil = Time.unscaledTime + 2.8f; }
+
+        private void OnDestroy()
+        {
+            foreach (Material material in ownedMaterials) if (material != null) Destroy(material);
+        }
+    }
+}

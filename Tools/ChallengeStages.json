@@ -1,0 +1,42 @@
+[
+  {
+    "Name": "Stage01_RelayBend",
+    "Path": "Assets/_Game/Scenes/Stages/Stage01_RelayBend.unity",
+    "Guid": "6bf213da836142e79ad8af0cf316c108",
+    "Platforms": 25,
+    "Checkpoints": 3,
+    "Height": 8.8
+  },
+  {
+    "Name": "Stage02_SpiralAscent",
+    "Path": "Assets/_Game/Scenes/Stages/Stage02_SpiralAscent.unity",
+    "Guid": "c58a41d1c3c54390b2d743141c662144",
+    "Platforms": 49,
+    "Checkpoints": 5,
+    "Height": 19.8
+  },
+  {
+    "Name": "Stage03_Serpentine",
+    "Path": "Assets/_Game/Scenes/Stages/Stage03_Serpentine.unity",
+    "Guid": "d9b7a64eb5a74c16955de6e37a504c25",
+    "Platforms": 46,
+    "Checkpoints": 6,
+    "Height": 15.400000000000002
+  },
+  {
+    "Name": "Stage04_CrossingHeights",
+    "Path": "Assets/_Game/Scenes/Stages/Stage04_CrossingHeights.unity",
+    "Guid": "49e9adfae5f24dcebce9f3d2a87f5f63",
+    "Platforms": 52,
+    "Checkpoints": 5,
+    "Height": 19.8
+  },
+  {
+    "Name": "Stage05_LongTraverse",
+    "Path": "Assets/_Game/Scenes/Stages/Stage05_LongTraverse.unity",
+    "Guid": "11defa92500c44e8a490f1ea7138d123",
+    "Platforms": 69,
+    "Checkpoints": 7,
+    "Height": 26.400000000000002
+  }
+]

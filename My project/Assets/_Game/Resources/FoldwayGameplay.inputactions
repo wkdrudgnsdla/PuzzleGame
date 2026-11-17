@@ -1,0 +1,280 @@
+{
+  "name": "FoldwayGameplay",
+  "maps": [
+    {
+      "name": "Gameplay",
+      "id": "39d2715a-2b21-4eb7-9000-000000000001",
+      "actions": [
+        {
+          "name": "Move",
+          "type": "Value",
+          "id": "39d2715a-2b21-4eb7-9000-000000000002",
+          "expectedControlType": "Vector2",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
+        },
+        {
+          "name": "Jump",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-000000000003",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        },
+        {
+          "name": "SwitchDimension",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-000000000004",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        },
+        {
+          "name": "Restart",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-000000000005",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        },
+        {
+          "name": "Pointer",
+          "type": "Value",
+          "id": "39d2715a-2b21-4eb7-9000-000000000006",
+          "expectedControlType": "Vector2",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
+        },
+        {
+          "name": "Zoom",
+          "type": "Value",
+          "id": "39d2715a-2b21-4eb7-9000-000000000007",
+          "expectedControlType": "Axis",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
+        },
+        {
+          "name": "Pan",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-000000000008",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        },
+        {
+          "name": "Orbit",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-000000000009",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        },
+        {
+          "name": "Continue",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-00000000000a",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        },
+        {
+          "name": "Controls",
+          "type": "Button",
+          "id": "39d2715a-2b21-4eb7-9000-00000000000b",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": false
+        }
+      ],
+      "bindings": [
+        {
+          "name": "WASD",
+          "id": "39d2715a-2b21-4eb7-9000-00000000000d",
+          "path": "2DVector",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Move",
+          "isComposite": true,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "up",
+          "id": "39d2715a-2b21-4eb7-9000-00000000000e",
+          "path": "<Keyboard>/w",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Move",
+          "isComposite": false,
+          "isPartOfComposite": true
+        },
+        {
+          "name": "down",
+          "id": "39d2715a-2b21-4eb7-9000-00000000000f",
+          "path": "<Keyboard>/s",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Move",
+          "isComposite": false,
+          "isPartOfComposite": true
+        },
+        {
+          "name": "left",
+          "id": "39d2715a-2b21-4eb7-9000-000000000010",
+          "path": "<Keyboard>/a",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Move",
+          "isComposite": false,
+          "isPartOfComposite": true
+        },
+        {
+          "name": "right",
+          "id": "39d2715a-2b21-4eb7-9000-000000000011",
+          "path": "<Keyboard>/d",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Move",
+          "isComposite": false,
+          "isPartOfComposite": true
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000012",
+          "path": "<Keyboard>/space",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Jump",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000013",
+          "path": "<Keyboard>/r",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "SwitchDimension",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000014",
+          "path": "<Keyboard>/backspace",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Restart",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000015",
+          "path": "<Mouse>/position",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Pointer",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000016",
+          "path": "<Mouse>/scroll/y",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Zoom",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000017",
+          "path": "<Mouse>/leftButton",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Pan",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000018",
+          "path": "<Mouse>/rightButton",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Orbit",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-000000000019",
+          "path": "<Keyboard>/enter",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Continue",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-00000000001a",
+          "path": "<Keyboard>/numpadEnter",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Continue",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-00000000001b",
+          "path": "<Keyboard>/5",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Controls",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "39d2715a-2b21-4eb7-9000-00000000001c",
+          "path": "<Keyboard>/numpad5",
+          "interactions": "",
+          "processors": "",
+          "groups": "",
+          "action": "Controls",
+          "isComposite": false,
+          "isPartOfComposite": false
+        }
+      ]
+    }
+  ],
+  "controlSchemes": []
+}

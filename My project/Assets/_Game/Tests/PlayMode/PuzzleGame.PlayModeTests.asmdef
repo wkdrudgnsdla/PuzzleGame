@@ -1,0 +1,12 @@
+{
+  "name": "PuzzleGame.PlayModeTests",
+  "rootNamespace": "PuzzleGame.Tests",
+  "references": [
+    "PuzzleGame.Runtime",
+    "Unity.InputSystem"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false
+}

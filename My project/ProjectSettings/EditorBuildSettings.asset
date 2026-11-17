@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/_Game/Scenes/MainMenu.unity
+    guid: 856e330a9ba45d74db06cdff2d4642fe
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Tutorial_CoreMechanics.unity
+    guid: 76976a33a7f4b704583f93c7ae0dd70b
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage01_FirstKey.unity
+    guid: 64b707fd48a66734eb8dabefc4b8fd48
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage02_SideKey.unity
+    guid: af8e68aa5c1bf5443b7f9d42bb4ba4a3
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage03_KeyRelay.unity
+    guid: 1e67f2e8186eab54f93ef7c46f584860
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage04_FirstRail.unity
+    guid: 569059d1f57f45749bc6e5dfc2dd69d6
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage05_RailRelay.unity
+    guid: f36d20a0a470caa46855266df13e391a
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage06_KeyedRail.unity
+    guid: 6d9b54cfef3fa9b428d4617339289e43
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage07_FirstCurrent.unity
+    guid: 464030aeba4803344bcf7be0448b8527
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage08_StoredCurrent.unity
+    guid: def20e7888a3ee743ac3958804af2c10
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage09_RailSupply.unity
+    guid: fcd699756250c3745b58486533b56127
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage10_KeyDetour.unity
+    guid: 08c661e334426bf45be980b431858919
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage11_PoweredTracks.unity
+    guid: 2db6152c7ff279b4d90eed61a1a82b06
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage12_CurrentFork.unity
+    guid: 98adebe52b52f2e49b29e79691d7aa7c
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage13_KeySequence.unity
+    guid: a5eca641eb737bf448febd2be8117c1b
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage14_TrackDependencies.unity
+    guid: e09e158d27c62084983ee3a5e0a16b25
+  - enabled: 1
+    path: Assets/_Game/Scenes/Campaign/Stage15_FinalCircuit.unity
+    guid: f2c5056792d8beb49af1e887f30cd6bf
+  m_configObjects:
+    com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_UseUCBPForAssetBundles: 0

@@ -1,0 +1,12 @@
+{
+  "name": "PuzzleGame.EditModeTests",
+  "references": [
+    "PuzzleGame.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
