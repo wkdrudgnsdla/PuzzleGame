@@ -36,7 +36,8 @@ namespace PuzzleGame
         private int cachedYaw = int.MinValue, cachedPitch = int.MinValue;
         private string yawLabel, pitchLabel;
         private bool controlsInitialized;
-        private bool useFinalClearDialog;
+        private bool useCampaignClearDialog;
+        private DimensionFailureToasts dimensionFailureToasts;
         private TMP_Text reboundGuide, controlsHint;
         private Transform defaultControlIcons, defaultControlLabels;
         private string defaultGuideText, defaultHintText;
@@ -52,11 +53,17 @@ namespace PuzzleGame
             RefreshLabels();
         }
 
-        internal void ConfigureCampaignStage(int stageNumber, bool finalStage)
+        internal void ConfigureCampaignStage(int stageNumber)
         {
-            useFinalClearDialog = finalStage;
+            useCampaignClearDialog = true;
             if (StageText != null)
                 SetText(StageText, stageNumber > 0 ? $"스테이지 {stageNumber}" : string.Empty);
+        }
+
+        internal void ShowDimensionFailure(string reason)
+        {
+            if (dimensionFailureToasts == null) dimensionFailureToasts = new DimensionFailureToasts(this);
+            dimensionFailureToasts.Show(reason);
         }
 
         private void OnEnable()
@@ -103,9 +110,13 @@ namespace PuzzleGame
             }
             if (Application.isPlaying)
             {
+                dimensionFailureToasts?.Tick(Time.unscaledDeltaTime);
                 InitializeControls();
                 if (GameInput.Action("Controls").WasPressedThisFrame())
+                {
                     ToggleControls();
+                    GameAudioEvents.Play(ControlsVisible ? SoundCue.UiConfirm : SoundCue.UiBack);
+                }
                 RefreshLabels();
             }
         }
@@ -227,7 +238,7 @@ namespace PuzzleGame
             SetText(ModeHintText, "클리어 조건 (" + completed + "/" + total + ")");
             SetColor(ModeHintText, total > 0 && completed == total
                 ? ObjectiveCompleteColor : ObjectivePendingColor);
-            if (ClearText != null) ClearText.gameObject.SetActive(Prototype.HasWon && !useFinalClearDialog);
+            if (ClearText != null) ClearText.gameObject.SetActive(Prototype.HasWon && !useCampaignClearDialog);
             if (AutoUpdateColors)
             {
                 Color color = Prototype.Is2D ? Mode2DColor : Mode3DColor;

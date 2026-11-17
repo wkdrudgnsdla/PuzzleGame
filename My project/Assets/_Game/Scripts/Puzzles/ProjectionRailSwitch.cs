@@ -10,6 +10,8 @@ namespace PuzzleGame
     /// </summary>
     public sealed class ProjectionRailSwitch : ProjectionPuzzleMechanic
     {
+        private static readonly Color GuideColor = new Color(0.73f, 0.83f, 0.91f);
+
         [Header("Ordered rail route")]
         public ProjectionRailSegment[] Segments = new ProjectionRailSegment[0];
         [Tooltip("Authored corners connect by exposed endpoints; straight joints also require matching tangents.")]
@@ -53,6 +55,8 @@ namespace PuzzleGame
         private float segmentProgress;
         private bool complete;
         private bool connected;
+        private bool alignmentKnown;
+        private bool slidingSound;
         private bool in2D;
         private bool valid;
 
@@ -92,6 +96,9 @@ namespace PuzzleGame
             segmentProgress = 0f;
             complete = false;
             connected = false;
+            alignmentKnown = false;
+            SetSlidingSound(false);
+            SetMaterialColor(railMaterial, GuideColor);
             if (targetMaterial != null) SetMaterialColor(targetMaterial, DestinationColor);
             if (sliderCollider != null) sliderCollider.enabled = false;
             OnReset.Invoke();
@@ -100,8 +107,16 @@ namespace PuzzleGame
         public override void Tick(ProjectionFrame frame, bool is2D, Vector2 moveInput, float deltaTime)
         {
             in2D = is2D;
-            if (!valid || visualRoot == null || sliderCollider == null || sliderBody == null) return;
+            if (!valid || visualRoot == null || sliderCollider == null || sliderBody == null)
+            {
+                SetSlidingSound(false);
+                return;
+            }
+            bool wasConnected = connected;
             connected = CurrentConnectionAligned(frame);
+            if (alignmentKnown && !is2D && !complete && connected && !wasConnected)
+                GameAudioEvents.Play(SoundCue.RailAligned);
+            alignmentKnown = true;
             Vector2 position = frame.Project(SliderWorldPosition);
 
             // The collider stays solid at an unconnected joint. It is never terrain, so the
@@ -110,15 +125,27 @@ namespace PuzzleGame
             // previous objective or the floor the player most recently stood on.
             sliderCollider.enabled = is2D && !complete;
             PositionSlider(position);
+            bool moved = false;
             if (is2D && !complete && deltaTime > 0f && CanPush(frame, moveInput, out float direction))
             {
+                int previousSegment = segmentIndex;
+                float previousProgress = segmentProgress;
                 Advance(frame, direction * Mathf.Min(PushSpeed, PrototypePlayer3D.Speed)
                     * Mathf.Clamp(deltaTime, 0f, 0.05f));
+                moved = previousSegment != segmentIndex || previousProgress != segmentProgress;
                 position = frame.Project(SliderWorldPosition);
                 PositionSlider(position);
                 connected = CurrentConnectionAligned(frame);
             }
+            SetSlidingSound(moved && !complete);
             RefreshVisuals(frame);
+        }
+
+        private void SetSlidingSound(bool sliding)
+        {
+            if (slidingSound == sliding) return;
+            slidingSound = sliding;
+            GameAudioEvents.SetLoop(SoundCue.RailSlideLoop, this, sliding);
         }
 
         private bool CanPush(ProjectionFrame frame, Vector2 moveInput, out float direction)
@@ -209,6 +236,8 @@ namespace PuzzleGame
             complete = true;
             sliderCollider.enabled = false;
             SetMaterialColor(targetMaterial, SwitchColor);
+            SetSlidingSound(false);
+            GameAudioEvents.Play(SoundCue.RailLocked);
             OnCompleted.Invoke();
         }
 
@@ -257,7 +286,7 @@ namespace PuzzleGame
             greenMaterial = NewMaterial("Rail switch green", SwitchColor);
             targetMaterial = NewMaterial("Rail destination yellow", DestinationColor);
             borderMaterial = NewMaterial("Rail dark border", new Color(0.035f, 0.07f, 0.09f));
-            railMaterial = NewMaterial("Rail guide", new Color(0.73f, 0.83f, 0.91f));
+            railMaterial = NewMaterial("Rail guide", GuideColor);
             for (int i = 0; i < Segments.Length; i++)
             {
                 // Paired guide lines read as a rail rather than a wire.
@@ -302,6 +331,7 @@ namespace PuzzleGame
         private void RefreshVisuals(ProjectionFrame frame)
         {
             bool showProjection = in2D;
+            SetMaterialColor(railMaterial, !in2D && connected && !complete ? AlignmentReadyColor : GuideColor);
             // Keep the physics root enabled: visibility must not alter the contact
             // lifecycle while the player jumps or stands on another floor.
             switchMesh2D.gameObject.SetActive(showProjection);
@@ -414,6 +444,12 @@ namespace PuzzleGame
         }
 
         private static Vector3 To2D(Vector2 point, float depth) => new Vector3(point.x, point.y, depth);
+
+        private void OnDisable()
+        {
+            alignmentKnown = false;
+            SetSlidingSound(false);
+        }
 
         private void OnDestroy()
         {

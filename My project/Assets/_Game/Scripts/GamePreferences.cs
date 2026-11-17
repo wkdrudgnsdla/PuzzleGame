@@ -5,10 +5,17 @@ namespace PuzzleGame
     public static class GamePreferences
     {
         private const string HasPlayedKey = "Foldway.Campaign.HasPlayed";
+        private const string CampaignResumeSceneKey = "Foldway.Campaign.ResumeScene";
         private const string VolumeKey = "Foldway.Audio.MasterVolume";
+        private const string CameraRotationSensitivityKey = "Foldway.Camera.RotationSensitivity";
+
+        internal const float MinCameraRotationSensitivity = 0.25f;
+        internal const float MaxCameraRotationSensitivity = 2f;
 
         public static string StartScene => PlayerPrefs.HasKey(HasPlayedKey)
             ? "Stage01_FirstKey" : "Tutorial_CoreMechanics";
+
+        public static string CampaignResumeScene => PlayerPrefs.GetString(CampaignResumeSceneKey);
 
         public static float MasterVolume
         {
@@ -20,9 +27,17 @@ namespace PuzzleGame
             }
         }
 
-        public static void RecordCampaignVisit()
+        public static float CameraRotationSensitivity
         {
-            if (PlayerPrefs.HasKey(HasPlayedKey)) return;
+            get => Mathf.Clamp(PlayerPrefs.GetFloat(CameraRotationSensitivityKey, 1f),
+                MinCameraRotationSensitivity, MaxCameraRotationSensitivity);
+            set => PlayerPrefs.SetFloat(CameraRotationSensitivityKey,
+                Mathf.Clamp(value, MinCameraRotationSensitivity, MaxCameraRotationSensitivity));
+        }
+
+        public static void RecordCampaignVisit(string sceneName)
+        {
+            PlayerPrefs.SetString(CampaignResumeSceneKey, sceneName);
             PlayerPrefs.SetInt(HasPlayedKey, 1);
             PlayerPrefs.Save();
         }

@@ -85,5 +85,12 @@ namespace PuzzleGame
             foreach (ProjectionPowerNode node in Nodes) if (node != null) node.ResetNode();
             foreach (ProjectionWire wire in Wires) if (wire != null) wire.ResetWire();
         }
+
+        private void OnDisable()
+        {
+            if (Wires == null) return;
+            foreach (ProjectionWire wire in Wires)
+                if (wire != null) wire.StopAudio();
+        }
     }
 }

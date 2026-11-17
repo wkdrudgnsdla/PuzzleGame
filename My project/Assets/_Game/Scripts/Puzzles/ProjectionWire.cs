@@ -23,6 +23,7 @@ namespace PuzzleGame
         private static readonly Color OffColor = new Color(0.12f, 0.15f, 0.19f);
         private static readonly Color ConnectedColor = new Color(0.34f, 0.43f, 0.5f);
         private static readonly Color EnergyColor = new Color(0.03f, 0.72f, 1f);
+        private static readonly Color CutPlugColor = new Color(0.5f, 0.36f, 0.2f);
         private readonly List<Vector3> projectedPoints = new List<Vector3>();
         private readonly List<Vector3> worldPoints = new List<Vector3>();
         private readonly List<Vector3> prefix = new List<Vector3>();
@@ -37,6 +38,7 @@ namespace PuzzleGame
         private Material cableMaterial, energyMaterial, worldCableMaterial, connectorMaterial;
         private bool visualsReady;
         private bool sourceEndExposed, targetEndExposed;
+        private bool readinessKnown, wasReadyToCharge, chargingSound;
 
         public float FillProgress { get; private set; }
         public bool IsConnected { get; private set; }
@@ -70,7 +72,7 @@ namespace PuzzleGame
             cableMaterial = NewMaterial("Empty wire", OffColor);
             energyMaterial = NewMaterial("Wire energy", EnergyColor);
             worldCableMaterial = NewMaterial("Physical cable insulation", OffColor, false);
-            connectorMaterial = NewMaterial("Cable cut plugs", new Color(0.5f, 0.36f, 0.2f), false);
+            connectorMaterial = NewMaterial("Cable cut plugs", CutPlugColor, false);
             worldRoot = NewRoot("Wire 3D", ProjectionPrototype.World3DLayer);
             projectedRoot = NewRoot("Wire 2D", ProjectionPrototype.World2DLayer);
             firstCutPlug = NewTubePrimitive("Source cut connector", PrimitiveType.Sphere, connectorMaterial);
@@ -85,18 +87,27 @@ namespace PuzzleGame
 
         public void ResetWire()
         {
+            StopAudio();
             FillProgress = 0f;
             IsConnected = false;
             IsCharging = false;
             ConnectionLatched = false;
             sourceEndExposed = targetEndExposed = false;
+            if (!visualsReady) return;
+            SetColor(worldCableMaterial, OffColor);
+            SetColor(connectorMaterial, CutPlugColor);
         }
 
         public void Tick(ProjectionFrame frame, bool is2D, float deltaTime, bool canCharge = true,
             bool showProjection = true)
         {
             IsConnected = CanConnect(frame);
-            IsCharging = is2D && canCharge && IsConnected && Source.IsPowered && !Target.IsPowered;
+            bool readyToCharge = canCharge && IsConnected && Source.IsPowered && !Target.IsPowered;
+            if (readinessKnown && !is2D && readyToCharge && !wasReadyToCharge && isActiveAndEnabled)
+                GameAudioEvents.Play(SoundCue.WireAligned);
+            readinessKnown = isActiveAndEnabled;
+            wasReadyToCharge = readyToCharge;
+            IsCharging = is2D && readyToCharge;
             if (IsCharging)
             {
                 // Only completed batteries latch. An unfinished front waits while the view changes.
@@ -106,18 +117,37 @@ namespace PuzzleGame
                 {
                     Target.Activate();
                     IsCharging = false;
+                    SetChargingSound(false);
+                    if (isActiveAndEnabled) GameAudioEvents.Play(SoundCue.WireCharged);
                 }
             }
+            SetChargingSound(IsCharging && isActiveAndEnabled);
             if (Source != null && Target != null && Source.IsPowered && Target.IsPowered)
                 FillProgress = 1f;
             // Remember a connection the player has actually used. Moving to the
             // next operating floor must not erase the already discovered circuit.
             if (IsValid && ((is2D && showProjection && IsConnected) || IsCharging ||
                 FillProgress > 0f || Target.IsPowered)) ConnectionLatched = true;
-            RefreshVisuals(frame, is2D, showProjection || ConnectionLatched);
+            RefreshVisuals(frame, is2D, showProjection || ConnectionLatched, !is2D && readyToCharge);
         }
 
-        private void RefreshVisuals(ProjectionFrame frame, bool is2D, bool showProjection)
+        private void SetChargingSound(bool charging)
+        {
+            if (chargingSound == charging) return;
+            chargingSound = charging;
+            if (charging) GameAudioEvents.Play(SoundCue.WireChargeStart);
+            GameAudioEvents.SetLoop(SoundCue.WireChargeLoop, this, charging);
+        }
+
+        internal void StopAudio()
+        {
+            readinessKnown = false;
+            SetChargingSound(false);
+        }
+
+        private void OnDisable() => StopAudio();
+
+        private void RefreshVisuals(ProjectionFrame frame, bool is2D, bool showProjection, bool showReady)
         {
             if (!visualsReady) return;
             worldRoot.gameObject.SetActive(!is2D && IsValid);
@@ -125,6 +155,9 @@ namespace PuzzleGame
             if (!IsValid) return;
             Color cableColor = IsConnected ? ConnectedColor : OffColor;
             SetColor(cableMaterial, cableColor);
+            Color readyColor = ProjectionPuzzleMechanic.AlignmentReadyColor;
+            SetColor(worldCableMaterial, showReady ? readyColor : OffColor);
+            SetColor(connectorMaterial, showReady ? readyColor : CutPlugColor);
             // Physical cables stay at their authored world coordinates. Their shape and
             // blue conductor never shift toward or turn to face the current camera.
             BuildPath(SourcePath, false, frame, 0f, worldPoints);
@@ -147,13 +180,13 @@ namespace PuzzleGame
             SetLine(projectedEnergy, prefix);
             projectedEnergy.enabled = IsConnected && prefix.Count >= 2 && Source.IsPowered;
 
-            // Show charged lengths on the physical halves too, without drawing through their 3D gap.
+            // Keep the ready preview uniformly green. The projected charge front still uses its stored progress.
             float firstLength = PathLength(SourcePath);
             float secondLength = PathLength(TargetPath);
             float filledLength = (firstLength + secondLength) * FillProgress;
             BuildPath(SourcePath, false, frame, 0f, worldPoints);
             BuildPrefix(worldPoints, firstLength > 0f ? Mathf.Clamp01(filledLength / firstLength) : 0f, prefix);
-            if (!Source.IsPowered) prefix.Clear();
+            if (showReady || !Source.IsPowered) prefix.Clear();
             SetTubes(worldSourceEnergy, prefix, Width * 0.65f, energyMaterial,
                 Vector3.up * Width * 0.7f, "Charged source conductor");
             BuildPath(SourcePath, true, frame, -0.4f, worldPoints);
@@ -163,7 +196,7 @@ namespace PuzzleGame
             BuildPath(TargetPath, false, frame, 0f, worldPoints);
             BuildPrefix(worldPoints, secondLength > 0f
                 ? Mathf.Clamp01((filledLength - firstLength) / secondLength) : 0f, prefix);
-            if (!Source.IsPowered) prefix.Clear();
+            if (showReady || !Source.IsPowered) prefix.Clear();
             SetTubes(worldTargetEnergy, prefix, Width * 0.65f, energyMaterial,
                 Vector3.up * Width * 0.7f, "Charged target conductor");
             BuildPath(TargetPath, true, frame, -0.4f, worldPoints);

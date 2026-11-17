@@ -22,11 +22,11 @@ namespace PuzzleGame
         private Transform generated;
         private bool collected;
         private bool aligned;
+        private bool alignmentKnown;
         private bool in2D;
         private bool initialized;
 
         private static readonly Color Gold = new Color(1f, 0.76f, 0.16f);
-        private static readonly Color Ready = new Color(0.4f, 1f, 0.54f);
 
         public override bool IsComplete => collected;
         public bool IsAligned => aligned;
@@ -58,6 +58,7 @@ namespace PuzzleGame
         public override void Tick(ProjectionFrame frame, bool is2D, Vector2 moveInput, float deltaTime)
         {
             in2D = is2D;
+            bool wasAligned = aligned;
             aligned = !collected && PrerequisitesComplete && FirstJoin != null && SecondJoin != null &&
                 ProjectionPuzzleMath.AreConnected(frame, FirstJoin.position, SecondJoin.position,
                     FirstJoin.right, SecondJoin.right, ConnectionTolerance, AngleTolerance) &&
@@ -65,6 +66,8 @@ namespace PuzzleGame
                 FacesSameWay(frame, FirstJoin.up, SecondJoin.up) &&
                 ProjectionConnectionVisibility.IsJoinExposed(frame, FirstJoin.position, SecondJoin.position,
                     -FirstJoin.right, SecondJoin.right, 0.3f);
+            if (alignmentKnown && !is2D && aligned && !wasAligned) GameAudioEvents.Play(SoundCue.KeyAligned);
+            alignmentKnown = true;
 
             if (initialized) UpdateVisuals(frame, is2D);
             if (!is2D || !aligned || Prototype == null) return;
@@ -79,6 +82,7 @@ namespace PuzzleGame
             collected = true;
             aligned = false;
             if (generated != null) generated.gameObject.SetActive(false);
+            GameAudioEvents.Play(SoundCue.KeyCollected);
             OnCollected.Invoke();
         }
 
@@ -86,6 +90,7 @@ namespace PuzzleGame
         {
             collected = false;
             aligned = false;
+            alignmentKnown = false;
             if (generated != null) generated.gameObject.SetActive(true);
             OnReset.Invoke();
         }
@@ -135,7 +140,7 @@ namespace PuzzleGame
             if (collected) return;
             Vector2 midpoint = FirstJoin != null && SecondJoin != null
                 ? (frame.Project(FirstJoin.position) + frame.Project(SecondJoin.position)) * 0.5f : Vector2.zero;
-            Color color = aligned ? Ready : Gold;
+            Color color = aligned ? AlignmentReadyColor : Gold;
             lineMaterial.color = color;
             if (lineMaterial.HasProperty("_BaseColor")) lineMaterial.SetColor("_BaseColor", color);
             foreach (KeyStroke stroke in strokes)

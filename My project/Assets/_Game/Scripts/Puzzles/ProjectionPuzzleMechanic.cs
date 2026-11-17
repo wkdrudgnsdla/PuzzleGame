@@ -5,6 +5,8 @@ namespace PuzzleGame
     /// <summary>A projected connection can drive any puzzle without owning camera or player controls.</summary>
     public abstract class ProjectionPuzzleMechanic : MonoBehaviour
     {
+        internal static readonly Color AlignmentReadyColor = new Color(0.4f, 1f, 0.54f);
+
         public bool RequiredForExit = true;
         [Tooltip("Completed mechanics that supply or unlock this device. Checkpoints are not prerequisites.")]
         public ProjectionPuzzleMechanic[] Prerequisites = new ProjectionPuzzleMechanic[0];

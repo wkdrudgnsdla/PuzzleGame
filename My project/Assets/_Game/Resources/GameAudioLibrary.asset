@@ -1,0 +1,82 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a55218a6f104ed292a88e46f6d0037b, type: 3}
+  m_Name: GameAudioLibrary
+  m_EditorClassIdentifier:
+  Music:
+  - {fileID: 8300000, guid: 65498ef3be835499ac4dcd23582257f9, type: 3}
+  - {fileID: 8300000, guid: 22c7751da2bf5e8fb5165686d102599f, type: 3}
+  - {fileID: 8300000, guid: 59a537cb9be5542bac47aa88f5f4b1b3, type: 3}
+  - {fileID: 8300000, guid: 58d260b752a1519bb2915ce7305bfc60, type: 3}
+  - {fileID: 8300000, guid: 52a3c8dae71c5d84978b0af00308a5f7, type: 3}
+  - {fileID: 8300000, guid: 8752c5ec0f375164b586ebb50376f9b5, type: 3}
+  Sounds:
+  - Cue: 0
+    Clip: {fileID: 8300000, guid: 87bcc37d4e6dc196905a2d44a10e25cc, type: 3}
+  - Cue: 1
+    Clip: {fileID: 8300000, guid: 07d015e36175d88fc35664da468786f4, type: 3}
+  - Cue: 2
+    Clip: {fileID: 8300000, guid: 16ad2e91ff320aa3125beb91a4f76651, type: 3}
+  - Cue: 3
+    Clip: {fileID: 8300000, guid: 1c88bb7099394dda49a3761a17d8f2fb, type: 3}
+  - Cue: 4
+    Clip: {fileID: 8300000, guid: ce80ba473ef151fb92c236fa58554ff4, type: 3}
+  - Cue: 5
+    Clip: {fileID: 8300000, guid: 40dab3738c1f6ffbae442bfe0813447d, type: 3}
+  - Cue: 6
+    Clip: {fileID: 8300000, guid: 67113f09a19aa7d9e1ff412c2748df89, type: 3}
+  - Cue: 7
+    Clip: {fileID: 8300000, guid: 87eb3c0d14d1e7ed559ae12e62a75d0d, type: 3}
+  - Cue: 8
+    Clip: {fileID: 8300000, guid: 9ec6cdb06726abbc8ceba3841144d11a, type: 3}
+  - Cue: 9
+    Clip: {fileID: 8300000, guid: 2f6f55469abdc821ac2ae8d1b38fda8b, type: 3}
+  - Cue: 10
+    Clip: {fileID: 8300000, guid: c85a9dca4dfaa65ca22ba4256e732530, type: 3}
+  - Cue: 11
+    Clip: {fileID: 8300000, guid: ab068e4600da286573ee3e603426f388, type: 3}
+  - Cue: 12
+    Clip: {fileID: 8300000, guid: 974a47ea7f9c4ebe0bd4bd7dbd759c37, type: 3}
+  - Cue: 13
+    Clip: {fileID: 8300000, guid: eae7df952b355268eb12520591dc7239, type: 3}
+  - Cue: 14
+    Clip: {fileID: 8300000, guid: ee4810415c679e3ca124a14f545548c2, type: 3}
+  - Cue: 15
+    Clip: {fileID: 8300000, guid: e7e443f27c18006269c0f94d75294e94, type: 3}
+  - Cue: 16
+    Clip: {fileID: 8300000, guid: 02708171e54bb6657b8af115c60690f3, type: 3}
+  - Cue: 17
+    Clip: {fileID: 8300000, guid: 1fa93e50ae764b9d1ebdc76e467feae4, type: 3}
+  - Cue: 18
+    Clip: {fileID: 8300000, guid: ea6c4cf3ee44c0af2794d3cbac0459ec, type: 3}
+  - Cue: 19
+    Clip: {fileID: 8300000, guid: abc5565c8b929b233a508b84bf400935, type: 3}
+  - Cue: 20
+    Clip: {fileID: 8300000, guid: 84a908ecc598e0146b2df51e77496e08, type: 3}
+  - Cue: 21
+    Clip: {fileID: 8300000, guid: 0355f89e9fdd3af6e041dd8abe519af7, type: 3}
+  - Cue: 22
+    Clip: {fileID: 8300000, guid: 9f3f8000b0e4ba2c273054b4ac565d3c, type: 3}
+  - Cue: 23
+    Clip: {fileID: 8300000, guid: aa3973df572954a45315484ce1db913f, type: 3}
+  - Cue: 24
+    Clip: {fileID: 8300000, guid: 397fcdd5d31ae7044068708ffde476aa, type: 3}
+  - Cue: 25
+    Clip: {fileID: 8300000, guid: 3263e1fd392872f2bb042a5e5d08ba19, type: 3}
+  - Cue: 26
+    Clip: {fileID: 8300000, guid: cb45bcd036372e32a3968ee657123341, type: 3}
+  - Cue: 27
+    Clip: {fileID: 8300000, guid: ece87d7474fcab16bd16a9726e573cf7, type: 3}
+  - Cue: 28
+    Clip: {fileID: 8300000, guid: 11842abd4d19b0ce91fa71113b7cc9a1, type: 3}
+  - Cue: 29
+    Clip: {fileID: 8300000, guid: 5571c61b654a5030204e07e0b1d5abdf, type: 3}

@@ -224,7 +224,6 @@ namespace PuzzleGame
 
             camera3D = CreateCamera("3D camera", (1 << World3DLayer) | (1 << Player3DLayer));
             camera3D.gameObject.tag = "MainCamera";
-            camera3D.gameObject.AddComponent<AudioListener>();
             camera2D = CreateCamera("2D projection camera", (1 << World2DLayer) | (1 << Player2DLayer));
 
             Material goalMaterial = CreateMaterial(new Color(0.49f, 0.96f, 0.63f), true);
@@ -299,7 +298,12 @@ namespace PuzzleGame
             Vector2 movement = moveInputOverride ?? GameInput.Action("Move").ReadValue<Vector2>();
             bool jump = jumpInputOverride || GameInput.Action("Jump").WasPressedThisFrame();
             jumpInputOverride = false;
-            if (GameInput.Action("Restart").WasPressedThisFrame()) { ResetPrototype(); return; }
+            if (GameInput.Action("Restart").WasPressedThisFrame())
+            {
+                GameAudioEvents.Play(SoundCue.PlayerRestart);
+                ResetPrototype();
+                return;
+            }
             UpdateCameraInput();
             if (GameInput.Action("SwitchDimension").WasPressedThisFrame()) TryToggleMode();
 
@@ -312,12 +316,18 @@ namespace PuzzleGame
                 (Is2D ? player2D.Foot.y < projectedFallLimit : player3D.Foot.y < worldFallLimit))
             {
                 ResetPlayerAt(Route != null ? Route.RespawnPosition : Spawn);
+                GameAudioEvents.Play(SoundCue.PlayerRespawn);
                 Notify("낙하했습니다. 마지막 도달 지점으로 돌아왔습니다.");
             }
-            if (!Is2D && support != null && IsGrounded &&
+            if (!HasWon && !Is2D && support != null && IsGrounded &&
                 Vector3.Distance(player3D.Foot, Goal) < 0.8f &&
                 (Route == null || !Route.RequireCompletionForExit || Route.IsComplete) &&
-                (PuzzleStage == null || PuzzleStage.ObjectivesComplete)) HasWon = true;
+                (PuzzleStage == null || PuzzleStage.ObjectivesComplete))
+            {
+                HasWon = true;
+                var stage = GetComponent<CampaignStageFlow>();
+                GameAudioEvents.Play(stage != null && stage.IsFinalStage ? SoundCue.CampaignClear : SoundCue.StageClear);
+            }
 
             // Share the result after movement and support resolution with the minimap render.
             returnPreview = TryGetReturnFoot(out Vector3 foot) ? foot : (Vector3?)null;
@@ -423,7 +433,8 @@ namespace PuzzleGame
         {
             // Match screen-space rotation across viewport resolutions.
             float zoomScale = Mathf.Min(1f, currentZoomSize / ClampZoom(initialZoomSize));
-            float sensitivity = dragDegreesPerPixel * zoomScale * 1080f / Mathf.Max(1, camera3D.pixelHeight);
+            float sensitivity = dragDegreesPerPixel * GamePreferences.CameraRotationSensitivity * zoomScale *
+                1080f / Mathf.Max(1, camera3D.pixelHeight);
             targetViewYaw += delta.x * sensitivity;
             targetViewPitch = Mathf.Clamp(targetViewPitch - delta.y * sensitivity,
                 -verticalOrbitLimitDegrees, verticalOrbitLimitDegrees);
@@ -566,7 +577,7 @@ namespace PuzzleGame
             UpdateCameraFollow();
             UpdateSupport();
             if (!IsGrounded || support == null)
-            { Notify("발판에 착지한 상태에서 R을 눌러주세요."); return false; }
+                return RejectDimensionSwitch($"발판에 착지한 뒤 {GameInput.KeyName("SwitchDimension")} 키를 누르세요.");
             if (!Is2D)
             {
                 // R commits the direction currently visible, including during a drag.
@@ -584,7 +595,7 @@ namespace PuzzleGame
                 {
                     if (!ProjectionMath.TryGetProjectedSurface(support.SourceCollider, frame, projectedFoot.x,
                         out float surfaceHeight, out Vector2 surfaceNormal))
-                    { Notify("이 각도에는 설 수 있는 투영 발판이 없습니다. 시점을 조금 바꿔주세요."); return false; }
+                        return RejectDimensionSwitch("이 각도에는 설 수 있는 투영 발판이 없습니다. 시점을 조금 바꿔주세요.");
                     projectedFoot.y = surfaceHeight + PrototypePlayer3D.Radius *
                         (1f / Mathf.Max(surfaceNormal.y, 0.1f) - 1f);
                 }
@@ -597,8 +608,7 @@ namespace PuzzleGame
                 {
                     player2D.gameObject.SetActive(false);
                     projectionRoot.gameObject.SetActive(false);
-                    Notify("투영된 지형이 몸과 겹칩니다. 위치나 시점을 바꿔주세요.");
-                    return false;
+                    return RejectDimensionSwitch("투영된 지형이 몸과 겹칩니다. 위치나 시점을 바꿔주세요.");
                 }
                 lastAnchor = player3D.Foot;
                 player3D.gameObject.SetActive(false);
@@ -611,7 +621,7 @@ namespace PuzzleGame
             else
             {
                 if (!TryGetReturnFoot(out Vector3 foot))
-                { Notify("이 위치에는 3D 복귀 공간이 없습니다. 발판 안쪽으로 이동하세요."); return false; }
+                    return RejectDimensionSwitch("이 위치에는 3D 복귀 공간이 없습니다. 발판 안쪽으로 이동하세요.");
                 player2D.SetSimulated(false);
                 player2D.gameObject.SetActive(false);
                 projectionRoot.gameObject.SetActive(false);
@@ -624,7 +634,16 @@ namespace PuzzleGame
             RebaseCameraFollow();
             camera3D.enabled = !Is2D;
             camera2D.enabled = Is2D;
+            GameAudioEvents.Play(Is2D ? SoundCue.DimensionTo2D : SoundCue.DimensionTo3D);
             return true;
+        }
+
+        private bool RejectDimensionSwitch(string reason)
+        {
+            Notify(reason);
+            if (Hud != null) Hud.ShowDimensionFailure(reason);
+            GameAudioEvents.Play(SoundCue.DimensionBlocked);
+            return false;
         }
 
         public bool SetViewYaw(float yaw)
@@ -712,13 +731,14 @@ namespace PuzzleGame
             projectionDirty = false;
         }
 
-        private void UpdatePuzzleExitState()
+        private void UpdatePuzzleExitState(bool playSound = true)
         {
             if (PuzzleStage == null) return;
             bool open = PuzzleStage.ObjectivesComplete &&
                 (Route == null || !Route.RequireCompletionForExit || Route.IsComplete);
             if (puzzleExitOpen == open) return;
             puzzleExitOpen = open;
+            if (open && playSound) GameAudioEvents.Play(SoundCue.ExitOpened);
             if (puzzleExitColors == null) puzzleExitColors = new MaterialPropertyBlock();
             Color color = open ? new Color(0.4f, 1f, 0.6f) : new Color(0.32f, 0.37f, 0.43f);
             puzzleExitColors.SetColor("_BaseColor", color);
@@ -824,8 +844,9 @@ namespace PuzzleGame
             if (Route != null) Route.ResetProgress();
             if (PuzzleStage != null) PuzzleStage.ResetProgress();
             ResetPlayerAt(Spawn, resetCamera: true);
-            UpdatePuzzleExitState();
+            UpdatePuzzleExitState(playSound: false);
             Notify($"시작 위치 · {GameInput.KeyName("SwitchDimension")} 키로 차원 전환 · {GameInput.KeyName("Jump")} 키로 점프");
+            GetComponent<CampaignStageFlow>()?.ResetTutorial();
         }
 
         private void ResetPlayerAt(Vector3 position, bool resetCamera = false)

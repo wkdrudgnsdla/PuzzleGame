@@ -25,11 +25,11 @@ namespace PuzzleGame
         public GameObject HomePanel;
         public GameObject SettingsPanel;
         public GameObject StageSelectPanel;
-        public Button StartButton, SettingsButton, QuitButton, BackButton, ResetBindingsButton;
+        public Button StartButton, ContinueButton, SettingsButton, QuitButton, BackButton, ResetBindingsButton;
         public Button StageSelectButton, StageSelectBackButton;
         public StageView[] Stages;
-        public Slider VolumeSlider;
-        public TMP_Text VolumeValue, BindingStatus;
+        public Slider VolumeSlider, CameraSensitivitySlider;
+        public TMP_Text ContinueStageLabel, VolumeValue, CameraSensitivityValue, BindingStatus;
         public InputSystemUIInputModule MenuInput;
         public SettingsBindingView[] Bindings;
 
@@ -38,6 +38,7 @@ namespace PuzzleGame
         private GameSettingsSession settings;
         private bool loading;
         private int focusedStage = -1;
+        private static int? stageToSelectOnOpen;
         private static readonly Color StageFill = new Color32(54, 50, 54, 255);
         private static readonly Color StageLabel = new Color32(222, 214, 208, 255);
         private static readonly Color FocusedStageFill = new Color32(73, 59, 56, 255);
@@ -46,25 +47,47 @@ namespace PuzzleGame
         private void OnEnable() => keypadSubmit.Enable();
         private void OnDisable() => keypadSubmit.Disable();
 
+        internal static void SelectStageOnNextMenuOpen(int stageNumber) => stageToSelectOnOpen = stageNumber;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ClearStageSelectRequest() => stageToSelectOnOpen = null;
+
         private void Start()
         {
+            MenuSelectionAudio.Attach(StartButton);
+            MenuSelectionAudio.Attach(ContinueButton);
+            MenuSelectionAudio.Attach(StageSelectButton);
+            MenuSelectionAudio.Attach(StageSelectBackButton);
+            MenuSelectionAudio.Attach(SettingsButton);
+            MenuSelectionAudio.Attach(QuitButton);
+            MenuSelectionAudio.Attach(BackButton);
             StartButton.onClick.AddListener(StartGame);
+            SetupContinue();
             StageSelectButton.onClick.AddListener(OpenStageSelect);
             StageSelectBackButton.onClick.AddListener(CloseStageSelect);
             foreach (StageView stage in Stages)
             {
+                MenuSelectionAudio.Attach(stage.Button);
                 string sceneName = stage.SceneName;
                 stage.Button.onClick.AddListener(() => LoadStage(sceneName));
             }
             SettingsButton.onClick.AddListener(OpenSettings);
             QuitButton.onClick.AddListener(Quit);
             BackButton.onClick.AddListener(CloseSettings);
-            settings = new GameSettingsSession(VolumeSlider, VolumeValue, BindingStatus, ResetBindingsButton,
-                Bindings, MenuInput);
-            HomePanel.SetActive(true);
+            settings = new GameSettingsSession(VolumeSlider, VolumeValue, CameraSensitivitySlider,
+                CameraSensitivityValue, BindingStatus, ResetBindingsButton, Bindings, MenuInput);
             SettingsPanel.SetActive(false);
+            int? stageNumber = stageToSelectOnOpen;
+            stageToSelectOnOpen = null;
+            if (stageNumber.HasValue)
+            {
+                ShowStageSelect(stageNumber.Value);
+                return;
+            }
+
+            HomePanel.SetActive(true);
             StageSelectPanel.SetActive(false);
-            Select(StartButton.gameObject);
+            Select(DefaultHomeButton.gameObject);
         }
 
         private void Update()
@@ -83,7 +106,7 @@ namespace PuzzleGame
             if (selection == null || !selection.activeInHierarchy)
             {
                 Select(SettingsPanel.activeSelf ? VolumeSlider.gameObject :
-                    StageSelectPanel.activeSelf ? Stages[0].Button.gameObject : StartButton.gameObject);
+                    StageSelectPanel.activeSelf ? Stages[0].Button.gameObject : DefaultHomeButton.gameObject);
                 selection = events.currentSelectedGameObject;
             }
 
@@ -95,6 +118,25 @@ namespace PuzzleGame
 
         private void StartGame() => LoadStage(GamePreferences.StartScene);
 
+        private Button DefaultHomeButton => ContinueButton.interactable ? ContinueButton : StartButton;
+
+        private void SetupContinue()
+        {
+            string resumeScene = GamePreferences.CampaignResumeScene;
+            int stage = Array.FindIndex(Stages, item => item.SceneName == resumeScene);
+            bool canContinue = stage >= 0 && Application.CanStreamedLevelBeLoaded(resumeScene);
+            ContinueButton.interactable = canContinue;
+            ContinueButton.GetComponentInChildren<TMP_Text>().alpha = canContinue ? 1f : 0.45f;
+            ContinueStageLabel.text = canContinue ? $"스테이지 {stage}" : string.Empty;
+            if (canContinue) ContinueButton.onClick.AddListener(() => LoadStage(resumeScene));
+
+            OverlayUi.Link(StartButton, null, canContinue ? ContinueButton : StageSelectButton);
+            OverlayUi.Link(ContinueButton, StartButton, StageSelectButton);
+            OverlayUi.Link(StageSelectButton, canContinue ? ContinueButton : StartButton, SettingsButton);
+            OverlayUi.Link(SettingsButton, StageSelectButton, QuitButton);
+            OverlayUi.Link(QuitButton, SettingsButton, null);
+        }
+
         private void LoadStage(string scene)
         {
             if (loading) return;
@@ -104,23 +146,31 @@ namespace PuzzleGame
                 return;
             }
             loading = true;
+            GameAudioEvents.Play(SoundCue.UiConfirm);
             HomePanel.SetActive(false);
             StageSelectPanel.SetActive(false);
-            settings.SaveVolume();
+            settings.SavePreferences();
             SceneManager.LoadSceneAsync(scene, LoadSceneMode.Single);
         }
 
         private void OpenStageSelect()
         {
+            GameAudioEvents.Play(SoundCue.UiConfirm);
+            ShowStageSelect(0);
+        }
+
+        private void ShowStageSelect(int stageNumber)
+        {
             HomePanel.SetActive(false);
             StageSelectPanel.SetActive(true);
-            GameObject firstStage = Stages[0].Button.gameObject;
-            Select(firstStage);
-            UpdateStageHighlight(firstStage);
+            GameObject initialStage = Stages[Mathf.Clamp(stageNumber, 0, Stages.Length - 1)].Button.gameObject;
+            Select(initialStage);
+            UpdateStageHighlight(initialStage);
         }
 
         private void CloseStageSelect()
         {
+            GameAudioEvents.Play(SoundCue.UiBack);
             UpdateStageHighlight(null);
             StageSelectPanel.SetActive(false);
             HomePanel.SetActive(true);
@@ -148,6 +198,7 @@ namespace PuzzleGame
 
         private void OpenSettings()
         {
+            GameAudioEvents.Play(SoundCue.UiConfirm);
             HomePanel.SetActive(false);
             SettingsPanel.SetActive(true);
             settings.Open();
@@ -155,6 +206,7 @@ namespace PuzzleGame
 
         private void CloseSettings()
         {
+            GameAudioEvents.Play(SoundCue.UiBack);
             settings.Close();
             SettingsPanel.SetActive(false);
             HomePanel.SetActive(true);
@@ -163,12 +215,13 @@ namespace PuzzleGame
 
         private void OnApplicationFocus(bool focused)
         {
-            if (!focused) settings?.SaveVolume();
+            if (!focused) settings?.SavePreferences();
         }
 
         private void Quit()
         {
-            settings.SaveVolume();
+            GameAudioEvents.Play(SoundCue.UiConfirm);
+            settings.SavePreferences();
             Application.Quit();
         }
 

@@ -13,6 +13,7 @@ namespace PuzzleGame
         [SerializeField] private RawImage artwork;
         [SerializeField] private TMP_Text homeTitle, homeHint;
         [SerializeField] private RectTransform settingsCard, settingsTitle, volumeLabel, volumeTrack, divider, bindingsTitle;
+        [SerializeField] private RectTransform sensitivityLabel, sensitivityTrack;
         [SerializeField] private RectTransform[] bindingLabels;
         [SerializeField] private RectTransform stageLayout, stageGrid;
         [SerializeField] private RectTransform[] stageFooter;
@@ -32,6 +33,8 @@ namespace PuzzleGame
             wideTitleAlignment = homeTitle.alignment;
             wideHintAlignment = homeHint.alignment;
             wideTutorialFontSize = menu.Stages[0].Label.fontSize;
+            OverlayUi.Link(menu.VolumeSlider, null, menu.CameraSensitivitySlider);
+            OverlayUi.Link(menu.CameraSensitivitySlider, menu.VolumeSlider, menu.Bindings[0].Button);
             RefreshLayout();
         }
 
@@ -92,14 +95,17 @@ namespace PuzzleGame
 
         private void LayoutHome()
         {
-            var anchor = new Vector2(0.5f, 0.53f);
+            var anchor = new Vector2(0.5f, 0.565f);
             var topCenter = new Vector2(0.5f, 1f);
             Place(homeTitle.rectTransform, Vector2.zero, homeTitle.rectTransform.sizeDelta, anchor, anchor, topCenter);
             homeTitle.alignment = TextAlignmentOptions.Center;
-            PlaceHomeButton(menu.StartButton, -145f, anchor, topCenter);
-            PlaceHomeButton(menu.StageSelectButton, -219f, anchor, topCenter);
-            PlaceHomeButton(menu.SettingsButton, -293f, anchor, topCenter);
-            PlaceHomeButton(menu.QuitButton, -367f, anchor, topCenter);
+            PlaceHomeButton(menu.StartButton, -136f, anchor, topCenter);
+            PlaceHomeButton(menu.ContinueButton, -214f, anchor, topCenter);
+            Place(menu.ContinueStageLabel.rectTransform, new Vector2(214f, -214f), new Vector2(144f, 74f),
+                anchor, anchor, new Vector2(0f, 1f));
+            PlaceHomeButton(menu.StageSelectButton, -292f, anchor, topCenter);
+            PlaceHomeButton(menu.SettingsButton, -370f, anchor, topCenter);
+            PlaceHomeButton(menu.QuitButton, -448f, anchor, topCenter);
             var bottomCenter = new Vector2(0.5f, 0f);
             Place(homeHint.rectTransform, new Vector2(0f, 45f), homeHint.rectTransform.sizeDelta,
                 bottomCenter, bottomCenter, bottomCenter);
@@ -107,33 +113,36 @@ namespace PuzzleGame
         }
 
         private void PlaceHomeButton(Button button, float y, Vector2 anchor, Vector2 pivot)
-            => Place((RectTransform)button.transform, new Vector2(0f, y), new Vector2(337f, 62f), anchor, anchor, pivot);
+            => Place((RectTransform)button.transform, new Vector2(0f, y), new Vector2(404f, 74f), anchor, anchor, pivot);
 
         private void LayoutSettings()
         {
-            Resize(settingsCard, 680f, 1000f);
+            Resize(settingsCard, 680f, 1050f);
             Place(settingsTitle, 30f, -22f, 240f, 66f);
             Place(volumeLabel, 30f, -103f, 150f, 44f);
             Place((RectTransform)menu.VolumeSlider.transform, 190f, -103f, 350f, 44f);
             Resize(volumeTrack, 350f, 8f);
             Place(menu.VolumeValue.rectTransform, 548f, -103f, 102f, 44f);
-            Place(divider, 30f, -162f, 620f, 1f);
-            Place(bindingsTitle, 30f, -174f, 300f, 48f);
-            SetNavigation(menu.VolumeSlider, null, menu.Bindings[0].Button);
+            Place(sensitivityLabel, 30f, -147f, 150f, 44f);
+            Place((RectTransform)menu.CameraSensitivitySlider.transform, 190f, -147f, 350f, 44f);
+            Resize(sensitivityTrack, 350f, 8f);
+            Place(menu.CameraSensitivityValue.rectTransform, 548f, -147f, 102f, 44f);
+            Place(divider, 30f, -206f, 620f, 1f);
+            Place(bindingsTitle, 30f, -218f, 300f, 48f);
             for (int i = 0; i < menu.Bindings.Length; i++)
             {
                 SettingsBindingView row = menu.Bindings[i];
-                float y = -230f - i * 49f;
+                float y = -274f - i * 49f;
                 Place(bindingLabels[i], 30f, y, 400f, 42f);
                 Place((RectTransform)row.Button.transform, 442f, y, 208f, 42f);
                 Resize(row.Value.rectTransform, 208f, 42f);
-                Selectable previous = i == 0 ? menu.VolumeSlider : menu.Bindings[i - 1].Button;
+                Selectable previous = i == 0 ? menu.CameraSensitivitySlider : menu.Bindings[i - 1].Button;
                 Selectable next = i == menu.Bindings.Length - 1 ? menu.BackButton : menu.Bindings[i + 1].Button;
                 SetNavigation(row.Button, previous, next);
             }
-            Place(menu.BindingStatus.rectTransform, 30f, -870f, 620f, 42f);
-            Place((RectTransform)menu.ResetBindingsButton.transform, 30f, -923f, 246f, 52f);
-            Place((RectTransform)menu.BackButton.transform, 461f, -923f, 189f, 52f);
+            Place(menu.BindingStatus.rectTransform, 30f, -914f, 620f, 42f);
+            Place((RectTransform)menu.ResetBindingsButton.transform, 30f, -967f, 246f, 52f);
+            Place((RectTransform)menu.BackButton.transform, 461f, -967f, 189f, 52f);
             Button last = menu.Bindings[menu.Bindings.Length - 1].Button;
             SetNavigation(menu.ResetBindingsButton, last, null, right: menu.BackButton);
             SetNavigation(menu.BackButton, last, null, left: menu.ResetBindingsButton);

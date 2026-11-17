@@ -55,8 +55,7 @@ namespace PuzzleGame
                     ProjectableBox block = CheckpointPlatforms[i];
                     if (block == null || Checkpoints[i] == null || !block.isActiveAndEnabled ||
                         !block.SourceCollider.enabled || Prototype.CurrentSupportId != block.Id) continue;
-                    completed = i + 1;
-                    RefreshMarkers();
+                    ReachCheckpoint(i + 1);
                     return;
                 }
             }
@@ -75,8 +74,16 @@ namespace PuzzleGame
                 if (Mathf.Abs(delta.y) > HeightTolerance ||
                     delta.x * delta.x + delta.z * delta.z > ActivationRadius * ActivationRadius) return;
             }
-            completed++;
+            ReachCheckpoint(completed + 1);
+        }
+
+        private void ReachCheckpoint(int count)
+        {
+            completed = count;
             RefreshMarkers();
+            GameAudioEvents.Play(SoundCue.CheckpointActivated);
+            if (RequireCompletionForExit && IsComplete && Prototype.PuzzleStage == null)
+                GameAudioEvents.Play(SoundCue.ExitOpened);
         }
 
         private void RefreshMarkers()
