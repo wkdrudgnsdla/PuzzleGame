@@ -62,7 +62,9 @@ namespace PuzzleGame
             }
 
             tutorial?.Tick();
-            if (Prototype == null || !Prototype.isActiveAndEnabled || !Prototype.HasWon || Prototype.Hud == null) return;
+            if (Prototype == null || !Prototype.isActiveAndEnabled || !Prototype.HasWon) return;
+            if (IsTutorial) GamePreferences.RecordTutorialCompletion();
+            if (Prototype.Hud == null) return;
             Prototype.SuspendGameplay();
             if (ClearText != null) ClearText.gameObject.SetActive(false);
             clearDialog = new CampaignClearDialog(Prototype.Hud, IsFinalStage ? null : Continue, Replay, SelectStage);

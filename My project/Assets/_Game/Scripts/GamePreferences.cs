@@ -4,7 +4,7 @@ namespace PuzzleGame
 {
     public static class GamePreferences
     {
-        private const string HasPlayedKey = "Foldway.Campaign.HasPlayed";
+        private const string TutorialCompletedKey = "Foldway.Campaign.TutorialCompleted";
         private const string CampaignResumeSceneKey = "Foldway.Campaign.ResumeScene";
         private const string VolumeKey = "Foldway.Audio.MasterVolume";
         private const string CameraRotationSensitivityKey = "Foldway.Camera.RotationSensitivity";
@@ -12,7 +12,9 @@ namespace PuzzleGame
         internal const float MinCameraRotationSensitivity = 0.25f;
         internal const float MaxCameraRotationSensitivity = 2f;
 
-        public static string StartScene => PlayerPrefs.HasKey(HasPlayedKey)
+        private static bool TutorialCompleted => PlayerPrefs.GetInt(TutorialCompletedKey) == 1;
+
+        public static string StartScene => TutorialCompleted
             ? "Stage01_FirstKey" : "Tutorial_CoreMechanics";
 
         public static string CampaignResumeScene => PlayerPrefs.GetString(CampaignResumeSceneKey);
@@ -38,7 +40,13 @@ namespace PuzzleGame
         public static void RecordCampaignVisit(string sceneName)
         {
             PlayerPrefs.SetString(CampaignResumeSceneKey, sceneName);
-            PlayerPrefs.SetInt(HasPlayedKey, 1);
+            PlayerPrefs.Save();
+        }
+
+        internal static void RecordTutorialCompletion()
+        {
+            if (TutorialCompleted) return;
+            PlayerPrefs.SetInt(TutorialCompletedKey, 1);
             PlayerPrefs.Save();
         }
 
